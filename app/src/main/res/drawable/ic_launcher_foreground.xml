@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Calendar page -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M30,36 h48 a4,4 0 0 1 4,4 v34 a4,4 0 0 1 -4,4 h-48 a4,4 0 0 1 -4,-4 v-34 a4,4 0 0 1 4,-4z" />
+    <!-- Header band -->
+    <path
+        android:fillColor="#D85A30"
+        android:pathData="M30,36 h48 a4,4 0 0 1 4,4 v8 h-56 v-8 a4,4 0 0 1 4,-4z" />
+    <!-- Rings -->
+    <path android:fillColor="#412402" android:pathData="M38,31 h4 v10 h-4z" />
+    <path android:fillColor="#412402" android:pathData="M66,31 h4 v10 h-4z" />
+    <!-- Today dot -->
+    <path
+        android:fillColor="#D85A30"
+        android:pathData="M54,63 m-6,0 a6,6 0 1 0 12,0 a6,6 0 1 0 -12,0" />
+</vector>

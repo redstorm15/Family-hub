@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Kitchen Calendar</string>
+    <string name="widget_month_label">Themed month</string>
+    <string name="widget_month_description">Full-screen month calendar with a seasonal theme for every month</string>
+    <string name="widget_loading">Loading calendar…</string>
+    <string name="widget_needs_permission">Tap to allow calendar access</string>
+</resources>
