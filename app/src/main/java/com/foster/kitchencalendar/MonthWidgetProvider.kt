@@ -74,6 +74,7 @@ class MonthWidgetProvider : BaseWidgetProvider(WidgetKind.MONTH) {
                 WidgetUpdater.request(context, WidgetKind.DATE)
                 WidgetUpdater.request(context, WidgetKind.MINI_WEATHER)
                 WidgetUpdater.request(context, WidgetKind.INDOOR)
+                WidgetUpdater.request(context, WidgetKind.WATCH)     // picks up newly installed apps
                 WidgetUpdater.request(context, WidgetKind.WEATHER) { pending.finish() }
             }
             ACTION_REFRESH_WEATHER -> {
@@ -106,3 +107,6 @@ class EaselWidgetProvider : BaseWidgetProvider(WidgetKind.EASEL)
 
 /** Indoor temperature, humidity and air quality from the Ambient station. */
 class IndoorWidgetProvider : BaseWidgetProvider(WidgetKind.INDOOR)
+
+/** Big tiles that open the streaming apps. */
+class WatchWidgetProvider : BaseWidgetProvider(WidgetKind.WATCH)

@@ -129,3 +129,7 @@ Add the **Indoor air** widget. It reads the same Ambient Weather account as the 
 - Tap to refresh. It updates with the weather every 15 minutes.
 
 Each widget now shows its own preview picture in the widget picker.
+
+### Watch
+
+Add the **Watch** widget for big tiles that open YouTube TV, Netflix, Disney+, Hulu, HBO Max, Prime Video, Paramount+ and Peacock. Only installed apps show up, using their real icons; new installs appear within 15 minutes. Widgets can't play video, so for "TV beside the calendar" open a show and swipe it into a Samsung pop-up window.

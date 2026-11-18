@@ -58,8 +58,8 @@ object WidgetUpdater {
         // from here could cancel it mid-run.)
         Scheduler.scheduleMidnight(context)
         val mgr = AppWidgetManager.getInstance(context)
-        if (kind == WidgetKind.INDOOR) {
-            updateIndoor(context, mgr, ids)
+        if (kind == WidgetKind.INDOOR || kind == WidgetKind.WATCH) {
+            if (kind == WidgetKind.INDOOR) updateIndoor(context, mgr, ids) else updateWatch(context, mgr, ids)
             return   // no calendar access needed
         }
         if (kind == WidgetKind.STICKY || kind == WidgetKind.EASEL) {
@@ -84,6 +84,7 @@ object WidgetUpdater {
             WidgetKind.STICKY -> updateSticky(context, mgr, ids)
             WidgetKind.EASEL -> updateEasel(context, mgr, ids)
             WidgetKind.INDOOR -> updateIndoor(context, mgr, ids)
+            WidgetKind.WATCH -> updateWatch(context, mgr, ids)
         }
     }
 
@@ -347,6 +348,41 @@ object WidgetUpdater {
                 RemoteViews(context.packageName, R.layout.widget_day).apply {
                     setImageViewUri(R.id.calendar_image, uri)
                     setOnClickPendingIntent(R.id.widget_root, refreshIntent(context))   // tap to refresh
+                }
+            }
+        }
+    }
+
+    private fun updateWatch(context: Context, mgr: AppWidgetManager, ids: IntArray) {
+        val services = WatchServices.installed(context)
+        val pkg = context.packageName
+        val density = context.resources.displayMetrics.density
+        for (id in ids) {
+            pushSizes(context, mgr, id) { wPx, hPx, viewW, viewH, save ->
+                val uri = save(WatchRenderer.render(wPx, hPx, density * wPx / viewW, services))
+                val pad = 8 * density
+                val (cols, rows) = WatchRenderer.grid(services.size, viewW - pad * 2, viewH - pad * 2)
+                RemoteViews(pkg, R.layout.widget_grid).apply {
+                    setImageViewUri(R.id.calendar_image, uri)
+                    setViewPadding(R.id.grid, pad.toInt(), pad.toInt(), pad.toInt(), pad.toInt())
+                    removeAllViews(R.id.grid)
+                    if (services.isNotEmpty()) for (r in 0 until rows) {
+                        val row = RemoteViews(pkg, R.layout.widget_row)
+                        for (c in 0 until cols) {
+                            val slot = r * cols + c
+                            val cell = RemoteViews(pkg, R.layout.widget_cell)
+                            services.getOrNull(slot)?.let { s ->
+                                WatchServices.launchIntent(context, s.pkg)?.let { intent ->
+                                    cell.setOnClickPendingIntent(R.id.cell, PendingIntent.getActivity(
+                                        context, 600_000 + id * 100 + slot, intent,
+                                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+                                    ))
+                                }
+                            }
+                            row.addView(R.id.row, cell)
+                        }
+                        addView(R.id.grid, row)
+                    }
                 }
             }
         }
