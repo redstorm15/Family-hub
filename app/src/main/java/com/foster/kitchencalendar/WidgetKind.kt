@@ -17,7 +17,8 @@ enum class WidgetKind(val providerClass: Class<out AppWidgetProvider>) {
     EASEL(EaselWidgetProvider::class.java),
     INDOOR(IndoorWidgetProvider::class.java),
     WATCH(WatchWidgetProvider::class.java),
-    MEALS(MealsWidgetProvider::class.java);
+    MEALS(MealsWidgetProvider::class.java),
+    TANK(TankWidgetProvider::class.java);
 
     fun ids(context: Context): IntArray =
         AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, providerClass))

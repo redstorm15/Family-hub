@@ -113,3 +113,6 @@ class WatchWidgetProvider : BaseWidgetProvider(WidgetKind.WATCH)
 
 /** Dinner plan for the week, with try nights. */
 class MealsWidgetProvider : BaseWidgetProvider(WidgetKind.MEALS)
+
+/** Aquarium upkeep: what's due this weekend. */
+class TankWidgetProvider : BaseWidgetProvider(WidgetKind.TANK)

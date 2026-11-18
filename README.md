@@ -143,3 +143,21 @@ Add the **Dinner plan** widget: tonight as a big card (your own photo of that di
 - **✨ Try night:** any column can be a new food; pick from gentle ideas for that column (honey-glazed chicken, garlic bread, mango cubes, honey mustard...), 🔀 for more, or type one. The widget marks new foods ✨ and shows the backup plate.
 - **✨ Fill the week** fills empty nights (no repeats, Saturday out if you haven't planned it, one midweek try night); **🔁 Repeat last week** copies last week.
 - **After a try night** the planner asks about each new food: 👎 Nope / 🙂 Tried it / ⭐ Loved it. Nopes rest for 60 days, loved foods stop counting as new, and everything tried shows under 🏆 New foods tried.
+
+### Aquarium
+
+Add the **Aquarium** widget: "Nothing this weekend 🎉" or this weekend's chores, plus what's next. Tap for the checklist (big ✓ buttons, 📅 to say "I did it Saturday", ✓ all, add/edit/delete chores).
+
+Seeded for the 29 gal + Fluval 307 (installed Sep 27, 2026), last water change Nov 15, 2026:
+
+| Chore | Every |
+| --- | --- |
+| 25% water change | 2 weeks |
+| Change carbon | 4 weeks |
+| Change filter floss (Quick Clear) | 4 weeks |
+| Rinse sponges in old tank water (only if flow slows) | 4 weeks |
+| Clean impeller, intake strainer & hoses | 3 months |
+| Replace one set of foams (only if worn) | 6 months |
+| Replace impeller, lube O-rings | yearly |
+
+Chores are grouped by weekend: anything due by Sunday shows as "this weekend".

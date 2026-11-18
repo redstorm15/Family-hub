@@ -58,8 +58,9 @@ object WidgetUpdater {
         // from here could cancel it mid-run.)
         Scheduler.scheduleMidnight(context)
         val mgr = AppWidgetManager.getInstance(context)
-        if (kind == WidgetKind.INDOOR || kind == WidgetKind.WATCH || kind == WidgetKind.MEALS) {
+        if (kind == WidgetKind.INDOOR || kind == WidgetKind.WATCH || kind == WidgetKind.MEALS || kind == WidgetKind.TANK) {
             when (kind) {
+                WidgetKind.TANK -> updateTank(context, mgr, ids)
                 WidgetKind.INDOOR -> updateIndoor(context, mgr, ids)
                 WidgetKind.WATCH -> updateWatch(context, mgr, ids)
                 else -> updateMeals(context, mgr, ids)
@@ -90,6 +91,7 @@ object WidgetUpdater {
             WidgetKind.INDOOR -> updateIndoor(context, mgr, ids)
             WidgetKind.WATCH -> updateWatch(context, mgr, ids)
             WidgetKind.MEALS -> updateMeals(context, mgr, ids)
+            WidgetKind.TANK -> updateTank(context, mgr, ids)
         }
     }
 
@@ -414,6 +416,26 @@ object WidgetUpdater {
             }
         }
         photo?.recycle()
+    }
+
+    private fun updateTank(context: Context, mgr: AppWidgetManager, ids: IntArray) {
+        val today = LocalDate.now()
+        val spec = TankSpec(today, TankStore.tasks(context), TankStore.tankName(context))
+        val density = context.resources.displayMetrics.density
+        val open = PendingIntent.getActivity(
+            context, 800_000,
+            Intent(context, AquariumActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        for (id in ids) {
+            pushSizes(context, mgr, id) { wPx, hPx, viewW, viewH, save ->
+                val uri = save(TankRenderer.render(wPx, hPx, viewW / density, viewH / density, spec))
+                RemoteViews(context.packageName, R.layout.widget_day).apply {
+                    setImageViewUri(R.id.calendar_image, uri)
+                    setOnClickPendingIntent(R.id.widget_root, open)
+                }
+            }
+        }
     }
 
     private fun updateEasel(context: Context, mgr: AppWidgetManager, ids: IntArray) {
