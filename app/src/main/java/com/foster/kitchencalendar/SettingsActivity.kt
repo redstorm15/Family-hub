@@ -9,6 +9,8 @@ import android.view.View
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.LinearLayout
+import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.Switch
 import android.widget.TextView
@@ -94,6 +96,32 @@ class SettingsActivity : Activity() {
                 setPadding(0, dp(8), 0, dp(8))
                 setOnCheckedChangeListener { _, v ->
                     Prefs.setShowTimes(this@SettingsActivity, v); Scheduler.refreshAll(this@SettingsActivity)
+                }
+            })
+
+            root.addView(Switch(this).apply {
+                text = "Compact header (more room for events)"; textSize = 16f
+                isChecked = Prefs.compactHeader(this@SettingsActivity)
+                setPadding(0, dp(8), 0, dp(8))
+                setOnCheckedChangeListener { _, v ->
+                    Prefs.setCompactHeader(this@SettingsActivity, v); Scheduler.refreshAll(this@SettingsActivity)
+                }
+            })
+
+            heading("Event text size")
+            val sizes = listOf("Normal", "Large", "Extra large")
+            root.addView(RadioGroup(this).apply {
+                orientation = LinearLayout.VERTICAL
+                sizes.forEachIndexed { i, label ->
+                    addView(RadioButton(this@SettingsActivity).apply {
+                        id = View.generateViewId(); text = label; textSize = 16f
+                        tag = i
+                        isChecked = Prefs.textSize(this@SettingsActivity) == i
+                    })
+                }
+                setOnCheckedChangeListener { group, checkedId ->
+                    val index = group.findViewById<RadioButton>(checkedId)?.tag as? Int ?: return@setOnCheckedChangeListener
+                    Prefs.setTextSize(this@SettingsActivity, index); Scheduler.refreshAll(this@SettingsActivity)
                 }
             })
 

@@ -2,7 +2,7 @@
 <!--
   The whole calendar is drawn into one image (calendar_image). The transparent
   overlay on top only provides tap targets. Its weights (20 / 5 / 75) MUST match
-  MonthLayout.HEADER_FRAC / DOW_FRAC / GRID_FRAC in MonthRenderer.kt.
+  MonthLayout.headerFrac(false) / DOW_FRAC / gridFrac(false) in MonthRenderer.kt.
 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"

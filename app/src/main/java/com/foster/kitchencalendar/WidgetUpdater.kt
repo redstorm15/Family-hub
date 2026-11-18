@@ -67,7 +67,9 @@ object WidgetUpdater {
             val offset = Prefs.monthOffset(context, id)
             val month = YearMonth.from(today).plusMonths(offset.toLong())
             val gridStart = MonthLayout.gridStart(month, mondays)
-            val gridEnd = gridStart.plusDays((MonthLayout.ROWS * MonthLayout.COLS - 1).toLong())
+            val rows = MonthLayout.rowsFor(month, mondays)
+            val gridEnd = gridStart.plusDays((rows * MonthLayout.COLS - 1).toLong())
+            val compact = Prefs.compactHeader(context)
 
             // Pad a day each side so all-day events (stored at UTC midnight) aren't clipped.
             val startMs = gridStart.atStartOfDay(zone).toInstant().toEpochMilli() - DAY_MS
@@ -82,6 +84,9 @@ object WidgetUpdater {
                 use24h = DateFormat.is24HourFormat(context),
                 zone = zone,
                 eventsByDay = CalendarRepository.eventsByDay(events, gridStart, gridEnd, zone),
+                rows = rows,
+                compactHeader = compact,
+                textScale = Prefs.textScale(context),
             )
 
             val sizes = widgetSizes(mgr.getAppWidgetOptions(id))
@@ -95,7 +100,7 @@ object WidgetUpdater {
                 val uri = ImageStore.save(context, id, index, generation, bmp)
                 bmp.recycle()
                 val padPx = MonthLayout.pad(viewW.roundToInt(), viewH.roundToInt()).roundToInt()
-                views[size] = monthViews(context, id, uri, padPx, offset, gridStart, today, zone)
+                views[size] = monthViews(context, id, uri, padPx, offset, gridStart, rows, compact, today, zone)
             }
 
             val remote = if (views.size == 1) views.values.first() else RemoteViews(views)
@@ -127,10 +132,10 @@ object WidgetUpdater {
 
     private fun monthViews(
         context: Context, widgetId: Int, image: Uri, padPx: Int, offset: Int,
-        gridStart: LocalDate, today: LocalDate, zone: ZoneId,
+        gridStart: LocalDate, rows: Int, compact: Boolean, today: LocalDate, zone: ZoneId,
     ): RemoteViews {
         val pkg = context.packageName
-        val rv = RemoteViews(pkg, R.layout.widget_month)
+        val rv = RemoteViews(pkg, if (compact) R.layout.widget_month_compact else R.layout.widget_month)
         rv.setImageViewUri(R.id.calendar_image, image)
         rv.setViewPadding(R.id.overlay, padPx, 0, padPx, padPx)
 
@@ -143,7 +148,7 @@ object WidgetUpdater {
         )
 
         rv.removeAllViews(R.id.grid)
-        for (r in 0 until MonthLayout.ROWS) {
+        for (r in 0 until rows) {
             val row = RemoteViews(pkg, R.layout.widget_row)
             for (c in 0 until MonthLayout.COLS) {
                 val index = r * MonthLayout.COLS + c

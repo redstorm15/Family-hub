@@ -22,15 +22,19 @@ import kotlin.math.min
 import kotlin.random.Random
 
 /**
- * Proportions shared by the renderer and the tap-target overlay (res/layout/widget_month.xml).
- * Keep these in sync with the XML weights 20 / 5 / 75.
+ * Proportions shared by the renderer and the tap-target overlays.
+ * Keep in sync with the XML weights:
+ *   widget_month.xml          20 / 5 / 75  (standard header)
+ *   widget_month_compact.xml  13 / 5 / 82  (compact header)
  */
 object MonthLayout {
-    const val HEADER_FRAC = 0.20f
     const val DOW_FRAC = 0.05f
-    const val GRID_FRAC = 0.75f
-    const val ROWS = 6
     const val COLS = 7
+    /** Text is sized as if the grid always had this many rows, so dropping a row adds room for events. */
+    const val REFERENCE_ROWS = 6
+
+    fun headerFrac(compact: Boolean) = if (compact) 0.13f else 0.20f
+    fun gridFrac(compact: Boolean) = 1f - headerFrac(compact) - DOW_FRAC
 
     /** Outer margin in px; also applied as padding to the overlay so taps line up. */
     fun pad(w: Int, h: Int): Float = min(w, h) * 0.02f
@@ -38,6 +42,12 @@ object MonthLayout {
     fun gridStart(month: YearMonth, weekStartsMonday: Boolean): LocalDate {
         val first = if (weekStartsMonday) DayOfWeek.MONDAY else DayOfWeek.SUNDAY
         return month.atDay(1).with(TemporalAdjusters.previousOrSame(first))
+    }
+
+    /** Weeks the month actually spans: usually 5, sometimes 6, rarely 4. */
+    fun rowsFor(month: YearMonth, weekStartsMonday: Boolean): Int {
+        val lead = java.time.temporal.ChronoUnit.DAYS.between(gridStart(month, weekStartsMonday), month.atDay(1)).toInt()
+        return (lead + month.lengthOfMonth() + COLS - 1) / COLS
     }
 }
 
@@ -49,6 +59,10 @@ data class MonthSpec(
     val use24h: Boolean,
     val zone: ZoneId,
     val eventsByDay: Map<LocalDate, List<CalEvent>>,
+    val rows: Int,
+    val compactHeader: Boolean,
+    /** 1.0 normal, ~1.2 large, ~1.4 extra large. */
+    val textScale: Float,
 )
 
 object MonthRenderer {
@@ -64,15 +78,16 @@ object MonthRenderer {
 
         val pad = MonthLayout.pad(w, h)
         val contentH = h - pad                         // overlay has bottom padding = pad
-        val headerH = contentH * MonthLayout.HEADER_FRAC
+        val headerH = contentH * MonthLayout.headerFrac(spec.compactHeader)
         val dowH = contentH * MonthLayout.DOW_FRAC
         val gridTop = headerH + dowH
-        val rowH = contentH * MonthLayout.GRID_FRAC / MonthLayout.ROWS
+        val gridH = contentH * MonthLayout.gridFrac(spec.compactHeader)
+        val rowH = gridH / spec.rows
         val innerW = w - 2 * pad
         val colW = innerW / MonthLayout.COLS
 
         canvas.drawColor(theme.headerBg)
-        drawDecorations(canvas, w.toFloat(), headerH, pad, innerW, spec.month, theme)
+        drawDecorations(canvas, w.toFloat(), headerH, pad, innerW, spec.month, theme, spec.compactHeader)
 
         // Body panel behind weekday labels and grid
         val body = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = theme.bodyBg }
@@ -81,7 +96,7 @@ object MonthRenderer {
         drawHeaderText(canvas, w.toFloat(), headerH, spec, theme)
         drawNav(canvas, w.toFloat(), headerH, pad, innerW, theme)
         drawWeekdays(canvas, pad, headerH, dowH, colW, spec, theme)
-        drawGrid(canvas, pad, gridTop, rowH, colW, spec, theme)
+        drawGrid(canvas, pad, gridTop, rowH, gridH / MonthLayout.REFERENCE_ROWS, colW, spec, theme)
         return bmp
     }
 
@@ -89,12 +104,14 @@ object MonthRenderer {
 
     private fun drawDecorations(
         canvas: Canvas, w: Float, headerH: Float, pad: Float, innerW: Float, month: YearMonth, theme: MonthTheme,
+        compact: Boolean,
     ) {
         val rnd = Random(month.year * 100 + month.monthValue)   // same art every redraw of a given month
         val base = min(headerH * 0.16f, w * 0.05f)
         val count = if (w > headerH * 6) 16 else 11
         // Keep clear of the title block and the two nav arrows.
-        val titleBox = RectF(w * 0.3f, headerH * 0.08f, w * 0.7f, headerH * 0.95f)
+        val titleBox = if (compact) RectF(w * 0.2f, 0f, w * 0.8f, headerH)
+                       else RectF(w * 0.3f, headerH * 0.08f, w * 0.7f, headerH * 0.95f)
         val navR = headerH * 0.2f
         val navL = pad + innerW / 10f to headerH / 2
         val navRt = w - pad - innerW / 10f to headerH / 2
@@ -122,6 +139,10 @@ object MonthRenderer {
 
     private fun drawHeaderText(canvas: Canvas, w: Float, headerH: Float, spec: MonthSpec, theme: MonthTheme) {
         val name = spec.month.month.getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault())
+        if (spec.compactHeader) {
+            drawCompactHeaderText(canvas, w, headerH, name, spec, theme)
+            return
+        }
         val monthSize = min(headerH * 0.40f, w * 0.085f)
         val smallSize = monthSize * 0.3f
         val gap = monthSize * 0.12f
@@ -143,6 +164,37 @@ object MonthRenderer {
         val isCurrent = YearMonth.from(spec.today) == spec.month
         val line = if (isCurrent) theme.tagline else "Tap here for today"
         canvas.drawText(line, w / 2, y - p.descent() * 0.5f, p)
+    }
+
+    /** One line: "November 2026", with a small hint underneath when viewing another month. */
+    private fun drawCompactHeaderText(
+        canvas: Canvas, w: Float, headerH: Float, name: String, spec: MonthSpec, theme: MonthTheme,
+    ) {
+        val isCurrent = YearMonth.from(spec.today) == spec.month
+        val monthSize = min(headerH * (if (isCurrent) 0.55f else 0.45f), w * 0.07f)
+        val yearSize = monthSize * 0.55f
+        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = theme.headerText }
+
+        p.typeface = boldFace; p.textSize = monthSize; p.letterSpacing = 0.02f
+        val nameW = p.measureText(name)
+        val gap = monthSize * 0.3f
+        val yearPaint = Paint(p).apply { typeface = mediumFace; textSize = yearSize; letterSpacing = 0.15f }
+        val yearText = spec.month.year.toString()
+        val totalW = nameW + gap + yearPaint.measureText(yearText)
+        val x0 = (w - totalW) / 2
+
+        val hintSize = monthSize * 0.32f
+        val blockH = monthSize + if (isCurrent) 0f else hintSize * 1.4f
+        val baseline = (headerH - blockH) / 2 + monthSize - p.descent() * 0.6f
+        canvas.drawText(name, x0, baseline, p)
+        canvas.drawText(yearText, x0 + nameW + gap, baseline, yearPaint)
+
+        if (!isCurrent) {
+            val hint = Paint(p).apply {
+                typeface = regularFace; textSize = hintSize; letterSpacing = 0.05f; textAlign = Paint.Align.CENTER
+            }
+            canvas.drawText("Tap here for today", w / 2, baseline + hintSize * 1.6f, hint)
+        }
     }
 
     private fun drawNav(canvas: Canvas, w: Float, headerH: Float, pad: Float, innerW: Float, theme: MonthTheme) {
@@ -187,12 +239,15 @@ object MonthRenderer {
     }
 
     private fun drawGrid(
-        canvas: Canvas, pad: Float, gridTop: Float, rowH: Float, colW: Float, spec: MonthSpec, theme: MonthTheme,
+        canvas: Canvas, pad: Float, gridTop: Float, rowH: Float, refRowH: Float, colW: Float,
+        spec: MonthSpec, theme: MonthTheme,
     ) {
         val start = MonthLayout.gridStart(spec.month, spec.weekStartsMonday)
-        val g = min(colW, rowH) * 0.025f
+        val g = min(colW, refRowH) * 0.025f
         val radius = g * 2.5f
-        val numSize = min(rowH * 0.15f, colW * 0.15f)
+        // Sized off the 6-row reference height: a 5-row month gets taller cells, which
+        // means more events per day rather than just bigger text.
+        val numSize = min(refRowH * 0.15f, colW * 0.15f) * spec.textScale
         val chipH = numSize * 1.15f
         val chipGap = chipH * 0.14f
 
@@ -202,7 +257,7 @@ object MonthRenderer {
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = chipH * 0.68f; typeface = regularFace }
         val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = g * 1.6f; color = theme.todayFill }
 
-        for (i in 0 until MonthLayout.ROWS * MonthLayout.COLS) {
+        for (i in 0 until spec.rows * MonthLayout.COLS) {
             val r = i / MonthLayout.COLS
             val c = i % MonthLayout.COLS
             val date = start.plusDays(i.toLong())

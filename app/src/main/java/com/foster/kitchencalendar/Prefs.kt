@@ -32,6 +32,14 @@ object Prefs {
     fun showTimes(context: Context) = sp(context).getBoolean("show_times", true)
     fun setShowTimes(context: Context, v: Boolean) = sp(context).edit().putBoolean("show_times", v).apply()
 
+    fun compactHeader(context: Context) = sp(context).getBoolean("compact_header", false)
+    fun setCompactHeader(context: Context, v: Boolean) = sp(context).edit().putBoolean("compact_header", v).apply()
+
+    /** 0 = normal, 1 = large, 2 = extra large. */
+    fun textSize(context: Context) = sp(context).getInt("text_size", 0).coerceIn(0, 2)
+    fun setTextSize(context: Context, v: Int) = sp(context).edit().putInt("text_size", v.coerceIn(0, 2)).apply()
+    fun textScale(context: Context) = floatArrayOf(1.0f, 1.2f, 1.4f)[textSize(context)]
+
     /** How many months away from "now" a given widget is currently showing. */
     fun monthOffset(context: Context, widgetId: Int) = sp(context).getInt("offset_$widgetId", 0)
     fun setMonthOffset(context: Context, widgetId: Int, v: Int) =

@@ -29,6 +29,8 @@ December, and so on). It reads events from the calendars synced on the tablet, s
   current month jumps back, and it drifts back on its own after 3 minutes.
 - **Updates** within seconds of any calendar change (including events added on someone's
   phone that sync down), at midnight, and every 30 minutes as a backup.
+- **Only as many weeks as the month needs** (usually 5), so cells get taller and fit more events.
+- **Settings:** compact header (more room for the grid) and event text size (Normal / Large / Extra large).
 - **All-day events** are solid color bars. **Timed events** show a colored dot and the start time.
   When a day overflows, it shows "+N more".
 
