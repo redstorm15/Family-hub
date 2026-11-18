@@ -99,7 +99,9 @@ object DayRenderer {
 
     private fun card(canvas: Canvas, rect: RectF, theme: MonthTheme) {
         val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = theme.cellBg }
-        canvas.drawRoundRect(rect, rect.height() * 0.18f, rect.height() * 0.18f, p)
+        // Same corner size for every card, however tall (the timeline used to get huge curves).
+        val r = min(rect.height() * 0.18f, min(rect.width(), rect.height()) * 0.04f + 8f)
+        canvas.drawRoundRect(rect, r, r, p)
     }
 
     /** Returns the y below what it drew. */

@@ -141,11 +141,14 @@ object WeekRenderer {
             val perCol = max(1, floor((usableH + chipGap) / (chipH + chipGap)).toInt())
             val capacity = perCol * cols
             val showCount = if (events.size > capacity) capacity - 1 else events.size
-            val listH = min(perCol, (showCount + (if (events.size > showCount) 1 else 0) + cols - 1) / cols) * (chipH + chipGap) - chipGap
+            val items = showCount + if (events.size > showCount) 1 else 0     // chips + "+N more"
+            // Balance items across columns (e.g. 2 + 2, not 3 + 1), filling top to bottom.
+            val rowsUsed = min(perCol, (items + cols - 1) / cols)
+            val listH = rowsUsed * (chipH + chipGap) - chipGap
             val y0 = rect.centerY() - listH / 2
             for (k in 0 until showCount) {
-                val c = k / perCol
-                val r = k % perCol
+                val c = k / rowsUsed
+                val r = k % rowsUsed
                 val x = evLeft + c * (colW + g * 3)
                 val y = y0 + r * (chipH + chipGap)
                 Draw.chip(canvas, events[k], RectF(x, y, x + colW, y + chipH), theme, chipPaint, text, 255,
@@ -154,8 +157,8 @@ object WeekRenderer {
             val hidden = events.size - showCount
             if (hidden > 0) {
                 val k = showCount
-                val x = evLeft + (k / perCol) * (colW + g * 3)
-                val y = y0 + (k % perCol) * (chipH + chipGap)
+                val x = evLeft + (k / rowsUsed) * (colW + g * 3)
+                val y = y0 + (k % rowsUsed) * (chipH + chipGap)
                 text.color = theme.mutedText; text.alpha = 255; text.typeface = Draw.medium
                 canvas.drawText("+$hidden more", x + chipH * 0.2f, Draw.centerBaseline(text, y + chipH / 2), text)
                 text.typeface = Draw.regular
