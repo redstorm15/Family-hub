@@ -136,9 +136,10 @@ Add the **Watch** widget for big tiles that open YouTube TV, Netflix, Disney+, H
 
 ### Dinner plan
 
-Add the **Dinner plan** widget: tonight's dinner big, the rest of the week beside or below it. Tap to open the planner.
+Add the **Dinner plan** widget: tonight as a big card (your own photo of that dinner, or an illustrated card), the plate as **Protein | Grain | Fruit/veg**, and the rest of the week. Tap to open the planner.
 
-- **Meal bank** starts with the family staples (nuggets/peas/rice, pasta & meatballs, tacos, pizza, takeout, mac & cheese, hot dogs & beans). Add a dinner once (name + emoji) and it's a tap from then on.
-- **✨ Fill the week** fills empty nights (no repeats, avoids last week's same night) and makes one midweek dinner a try night. **🔁 Repeat last week** copies last week.
-- **✨ Try night:** the dinner stays exactly as usual, plus one small new thing on the side, picked from gentle ideas for that meal (honey mustard to dip, corn, mango cubes, garlic bread...). "🔀 Other ideas" or "✏️ My own" if none fit. The widget shows the backup plate (default "plain chicken & rice", editable).
-- **After a try night** the planner (and the widget) asks: 👎 Nope / 🙂 Tried it / ⭐ Loved it. Nopes aren't suggested for 60 days, loved foods stop counting as "new", and everything they've tried shows under 🏆 New foods tried.
+- **Meal bank** starts with the family staples, each with its usual plate (nuggets/rice/peas, meatballs/pasta, taco meat/tortillas, pizza, mac & cheese, hot dogs/bun/baked beans), plus **Order takeout** and **Eat out**. Add a dinner once (name + one of 48 emoji). In **🧺 Meal bank & photos**, take or choose a photo of a dinner and it becomes that night's card.
+- **Each night:** pick the dinner and its usual plate comes along. Tap Protein, Grain or Fruit/veg to change one (or add a dip/sauce). "Save as usual plate" remembers the change.
+- **✨ Try night:** any column can be a new food; pick from gentle ideas for that column (honey-glazed chicken, garlic bread, mango cubes, honey mustard...), 🔀 for more, or type one. The widget marks new foods ✨ and shows the backup plate.
+- **✨ Fill the week** fills empty nights (no repeats, Saturday out if you haven't planned it, one midweek try night); **🔁 Repeat last week** copies last week.
+- **After a try night** the planner asks about each new food: 👎 Nope / 🙂 Tried it / ⭐ Loved it. Nopes rest for 60 days, loved foods stop counting as new, and everything tried shows under 🏆 New foods tried.

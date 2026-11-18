@@ -395,7 +395,9 @@ object WidgetUpdater {
 
     private fun updateMeals(context: Context, mgr: AppWidgetManager, ids: IntArray) {
         val today = LocalDate.now()
-        val spec = MealSpec(today, MealStore.week(context, today), MealStore.backup(context), MealStore.pendingFeedback(context, today))
+        val week = MealStore.week(context, today)
+        val photo = week.first().second.meal?.let { MealStore.photo(context, it.id) }
+        val spec = MealSpec(today, week, MealStore.backup(context), MealStore.pendingFeedback(context, today), photo)
         val density = context.resources.displayMetrics.density
         val open = PendingIntent.getActivity(
             context, 700_000,
@@ -411,6 +413,7 @@ object WidgetUpdater {
                 }
             }
         }
+        photo?.recycle()
     }
 
     private fun updateEasel(context: Context, mgr: AppWidgetManager, ids: IntArray) {
