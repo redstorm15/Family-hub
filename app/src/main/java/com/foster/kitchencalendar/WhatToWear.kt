@@ -15,16 +15,18 @@ import kotlin.math.sin
 enum class Wear(val label: String) {
     WINTER_COAT("Winter coat"),
     HAT_GLOVES("Hat & gloves"),
-    JACKET("Jacket"),
+    JACKET("Fall jacket"),
     SWEATER("Sweater"),
     LONG_SLEEVES("Long sleeves"),
     TSHIRT("T-shirt"),
     SHORTS("Shorts"),
-    RAINCOAT("Raincoat"),
+    RAINCOAT("Rain jacket"),
     UMBRELLA("Umbrella"),
     RAIN_BOOTS("Rain boots"),
     SNOW_BOOTS("Snow boots"),
     SUNSCREEN("Sunscreen"),
+    SUN_HAT("Sun hat"),
+    WATER_BOTTLE("Water bottle"),
 }
 
 data class WearAdvice(val items: List<Wear>, val headline: String, val note: String?, val forTomorrow: Boolean = false)
@@ -64,26 +66,50 @@ object WhatToWear {
         val uv = max(window.maxOf { it.uv ?: 0.0 }, b.station?.uv?.toDouble() ?: 0.0)
 
         val items = mutableListOf<Wear>()
+        val wet = rain >= 50 && !snow
         val headline = when {
-            cold < 25 -> { items += Wear.WINTER_COAT; items += Wear.HAT_GLOVES; "Bundle up!" }
-            cold < 40 -> { items += Wear.WINTER_COAT; "Winter coat weather" }
-            cold < 50 -> { items += Wear.JACKET; "Jacket weather" }
-            cold < 60 -> { items += Wear.SWEATER; "Sweater weather" }
-            cold < 70 -> { items += Wear.LONG_SLEEVES; "Long sleeves today" }
-            cold < 78 -> { items += Wear.TSHIRT; "T-shirt weather" }
-            else -> { items += Wear.TSHIRT; items += Wear.SHORTS; "Shorts weather" }
-        }.let { if (snow) "Snow gear" else it }
-
-        if (snow) {
-            items += Wear.SNOW_BOOTS
-            if (Wear.HAT_GLOVES !in items) items += Wear.HAT_GLOVES
-        } else if (rain >= 50) {
-            items += Wear.RAINCOAT
-            if (rain >= 70) items += Wear.RAIN_BOOTS
-        } else if (rain >= 30) {
-            items += Wear.UMBRELLA
+            snow -> {
+                items += Wear.WINTER_COAT; items += Wear.HAT_GLOVES; items += Wear.SNOW_BOOTS
+                "Snow gear"
+            }
+            cold < 25 -> {
+                items += Wear.WINTER_COAT; items += Wear.HAT_GLOVES
+                if (wet) items += Wear.RAIN_BOOTS
+                "Bundle up!"
+            }
+            cold < 40 -> {
+                items += Wear.WINTER_COAT
+                if (wet) items += if (rain >= 70) Wear.RAIN_BOOTS else Wear.UMBRELLA
+                if (wet) "Cold and rainy" else "Winter coat weather"
+            }
+            cold < 50 -> if (wet) {
+                items += Wear.SWEATER; items += Wear.RAINCOAT; "Rain jacket day"
+            } else {
+                items += Wear.JACKET; "Fall jacket weather"
+            }
+            cold < 60 -> {
+                items += if (wet) Wear.LONG_SLEEVES else Wear.SWEATER
+                if (wet) { items += Wear.RAINCOAT; "Rain jacket day" } else "Sweater weather"
+            }
+            cold < 70 -> {
+                items += Wear.LONG_SLEEVES
+                if (wet) { items += Wear.RAINCOAT; "Rain jacket day" } else "Long sleeves today"
+            }
+            cold < 78 -> {
+                items += Wear.TSHIRT
+                if (wet) { items += Wear.RAINCOAT; "Warm and rainy" } else "T-shirt weather"
+            }
+            else -> {
+                items += Wear.TSHIRT; items += Wear.SHORTS
+                if (warm >= 85) items += Wear.WATER_BOTTLE
+                if (wet) items += Wear.UMBRELLA
+                if (warm >= 85) "Hot one today!" else "Shorts weather"
+            }
         }
+        if (!wet && !snow && rain >= 30 && Wear.UMBRELLA !in items) items += Wear.UMBRELLA
+        if (wet && rain >= 70 && cold >= 40 && Wear.RAIN_BOOTS !in items) items += Wear.RAIN_BOOTS
         if (uv >= 6) items += Wear.SUNSCREEN
+        if (uv >= 8 && !wet) items += Wear.SUN_HAT
 
         val note = when {
             warm - cold >= 15 -> "Layers: $rawCold° to $rawWarm°"
@@ -102,8 +128,8 @@ object WearIcon {
         canvas.save()
         canvas.translate(cx, cy)
         when (wear) {
-            Wear.WINTER_COAT -> garment(canvas, s, c("#D85A30"), longSleeves = true, bottom = 0.9f, zip = true, hood = false)
-            Wear.JACKET -> garment(canvas, s, c("#378ADD"), longSleeves = true, bottom = 0.5f, zip = true, hood = false)
+            Wear.WINTER_COAT -> garment(canvas, s, c("#D85A30"), longSleeves = true, bottom = 0.92f, zip = true, hood = true, quilted = true)
+            Wear.JACKET -> garment(canvas, s, c("#BA7517"), longSleeves = true, bottom = 0.42f, zip = false, hood = false, buttons = true, collar = true)
             Wear.SWEATER -> garment(canvas, s, c("#1D9E75"), longSleeves = true, bottom = 0.55f, zip = false, hood = false, stripe = true)
             Wear.LONG_SLEEVES -> garment(canvas, s, c("#7F77DD"), longSleeves = true, bottom = 0.5f, zip = false, hood = false)
             Wear.TSHIRT -> garment(canvas, s, c("#EF9F27"), longSleeves = false, bottom = 0.5f, zip = false, hood = false)
@@ -114,6 +140,8 @@ object WearIcon {
             Wear.RAIN_BOOTS -> boot(canvas, s, c("#EF9F27"), fur = false)
             Wear.SNOW_BOOTS -> boot(canvas, s, c("#854F0B"), fur = true)
             Wear.SUNSCREEN -> sunscreen(canvas, s)
+            Wear.SUN_HAT -> sunHat(canvas, s)
+            Wear.WATER_BOTTLE -> bottle(canvas, s)
         }
         canvas.restore()
     }
@@ -125,6 +153,7 @@ object WearIcon {
     private fun garment(
         canvas: Canvas, s: Float, color: Int, longSleeves: Boolean, bottom: Float,
         zip: Boolean, hood: Boolean, stripe: Boolean = false, buttons: Boolean = false,
+        quilted: Boolean = false, collar: Boolean = false,
     ) {
         val body = fill(color)
         val sleeve = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -148,7 +177,40 @@ object WearIcon {
             canvas.drawLine(-s * 0.4f, -s * 0.05f, s * 0.4f, -s * 0.05f, line)
             canvas.drawLine(-s * 0.4f, s * 0.08f, s * 0.4f, s * 0.08f, line)
         }
-        if (buttons) for (i in 0 until 3) canvas.drawCircle(0f, -s * 0.3f + i * s * 0.32f, s * 0.05f, fill(d))
+        if (buttons) {
+            val n = if (bottom < 0.6f) 2 else 3
+            for (i in 0 until n) canvas.drawCircle(0f, -s * 0.3f + i * s * 0.32f, s * 0.05f, fill(d))
+        }
+        if (quilted) {
+            // Puffy stitching across body and sleeves
+            var yq = -s * 0.32f
+            while (yq < s * bottom - s * 0.1f) {
+                canvas.drawLine(-s * 0.4f, yq, -s * 0.06f, yq, line)
+                canvas.drawLine(s * 0.06f, yq, s * 0.4f, yq, line)
+                yq += s * 0.26f
+            }
+            if (hood) canvas.drawArc(RectF(-s * 0.3f, -s * 0.96f, s * 0.3f, -s * 0.4f), 200f, 140f, false,
+                Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = Color.WHITE; style = Paint.Style.STROKE; strokeWidth = s * 0.09f; strokeCap = Paint.Cap.ROUND })
+        }
+        if (collar) {
+            val cp = fill(dark(color))
+            val l = Path().apply { moveTo(-s * 0.02f, -s * 0.5f); lineTo(-s * 0.26f, -s * 0.66f); lineTo(-s * 0.22f, -s * 0.32f); close() }
+            val r = Path().apply { moveTo(s * 0.02f, -s * 0.5f); lineTo(s * 0.26f, -s * 0.66f); lineTo(s * 0.22f, -s * 0.32f); close() }
+            canvas.drawPath(l, cp); canvas.drawPath(r, cp)
+        }
+    }
+
+    private fun sunHat(canvas: Canvas, s: Float) {
+        val color = c("#FAC775")
+        canvas.drawOval(RectF(-s * 0.85f, -s * 0.05f, s * 0.85f, s * 0.35f), fill(color))
+        canvas.drawArc(RectF(-s * 0.42f, -s * 0.6f, s * 0.42f, s * 0.3f), 180f, 180f, true, fill(color))
+        canvas.drawRect(-s * 0.42f, -s * 0.05f, s * 0.42f, s * 0.08f, fill(c("#D85A30")))
+    }
+
+    private fun bottle(canvas: Canvas, s: Float) {
+        canvas.drawRoundRect(RectF(-s * 0.3f, -s * 0.5f, s * 0.3f, s * 0.85f), s * 0.16f, s * 0.16f, fill(c("#378ADD")))
+        canvas.drawRoundRect(RectF(-s * 0.17f, -s * 0.78f, s * 0.17f, -s * 0.48f), s * 0.06f, s * 0.06f, fill(c("#185FA5")))
+        canvas.drawRoundRect(RectF(-s * 0.3f, s * 0.05f, s * 0.3f, s * 0.35f), 0f, 0f, fill(c("#B5D4F4")))
     }
 
     private fun shorts(canvas: Canvas, s: Float) {
