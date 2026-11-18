@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Sticky board: one image drawn by StickyRenderer, with a tap grid on top (one cell per tile). -->
+<!-- Sticky board: one image drawn by StickyRenderer, with a tap grid on top (one cell per note) and the + button above that. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
@@ -17,4 +17,11 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:orientation="vertical" />
+
+    <!-- Tap target for the floating + (drawn in the image); size and position set in code. -->
+    <FrameLayout
+        android:id="@+id/add_button"
+        android:layout_width="64dp"
+        android:layout_height="64dp"
+        android:layout_gravity="top|start" />
 </FrameLayout>

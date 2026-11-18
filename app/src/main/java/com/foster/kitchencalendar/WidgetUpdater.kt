@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.text.format.DateFormat
 import android.util.Log
 import android.util.SizeF
+import android.util.TypedValue
 import android.widget.RemoteViews
 import java.time.LocalDate
 import java.time.YearMonth
@@ -290,26 +291,35 @@ object WidgetUpdater {
     private fun updateSticky(context: Context, mgr: AppWidgetManager, ids: IntArray) {
         val notes = StickyStore.all(context)
         val pkg = context.packageName
+        val density = context.resources.displayMetrics.density
         for (id in ids) {
-            pushSizes(context, mgr, id) { wPx, hPx, _, _, save ->
-                val uri = save(StickyRenderer.render(wPx, hPx, notes))
-                val tiles = StickyBoard.tiles(notes.size)
-                val (cols, rows) = StickyBoard.grid(tiles, wPx.toFloat(), hPx.toFloat())
+            pushSizes(context, mgr, id) { wPx, hPx, viewW, viewH, save ->
+                val uri = save(StickyRenderer.render(wPx, hPx, density * wPx / viewW, notes))
+                val (cols, rows) = StickyBoard.grid(notes.size, viewW, viewH)
+                val plus = StickyBoard.addButton(notes.size, viewW, viewH, density)
                 RemoteViews(pkg, R.layout.widget_sticky).apply {
                     setImageViewUri(R.id.calendar_image, uri)
                     removeAllViews(R.id.grid)
-                    for (r in 0 until rows) {
+                    if (notes.isEmpty()) {
+                        // Empty board: tapping anywhere starts the first note.
+                        setOnClickPendingIntent(R.id.widget_root, stickyIntent(context, id, 99, -1))
+                    } else for (r in 0 until rows) {
                         val row = RemoteViews(pkg, R.layout.widget_row)
                         for (c in 0 until cols) {
                             val slot = r * cols + c
                             val cell = RemoteViews(pkg, R.layout.widget_cell)
-                            // Empty leftover spots also start a new note: a bigger target for small hands.
-                            val noteId = if (slot < tiles) StickyBoard.noteAt(slot, notes)?.id ?: -1 else -1
-                            cell.setOnClickPendingIntent(R.id.cell, stickyIntent(context, id, slot, noteId))
+                            // Empty leftover spots also start a new note.
+                            cell.setOnClickPendingIntent(R.id.cell, stickyIntent(context, id, slot, notes.getOrNull(slot)?.id ?: -1))
                             row.addView(R.id.row, cell)
                         }
                         addView(R.id.grid, row)
                     }
+                    // The floating + gets its own tap target on top of the notes.
+                    setViewLayoutWidth(R.id.add_button, plus.width(), TypedValue.COMPLEX_UNIT_PX)
+                    setViewLayoutHeight(R.id.add_button, plus.height(), TypedValue.COMPLEX_UNIT_PX)
+                    setViewLayoutMargin(R.id.add_button, RemoteViews.MARGIN_LEFT, plus.left, TypedValue.COMPLEX_UNIT_PX)
+                    setViewLayoutMargin(R.id.add_button, RemoteViews.MARGIN_TOP, plus.top, TypedValue.COMPLEX_UNIT_PX)
+                    setOnClickPendingIntent(R.id.add_button, stickyIntent(context, id, 98, -1))
                 }
             }
         }

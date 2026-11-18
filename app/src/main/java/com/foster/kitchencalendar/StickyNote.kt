@@ -5,7 +5,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Color
-import android.graphics.DashPathEffect
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Rect
@@ -77,45 +76,54 @@ object StickyStore {
     }
 }
 
-/** How the board splits into tiles: slot 0 is always "+ New note" (unless full), then the notes. */
+/** Board geometry: notes fill a grid; a round "+" floats in the bottom-right corner. */
 object StickyBoard {
-    fun hasAddTile(noteCount: Int) = noteCount < StickyStore.MAX_NOTES
-    fun tiles(noteCount: Int) = if (hasAddTile(noteCount)) noteCount + 1 else noteCount
-
-    /** Columns × rows that make the tiles as big as possible for this widget shape. */
+    /** Columns × rows that make the notes as big as possible for this widget shape. */
     fun grid(tiles: Int, w: Float, h: Float): Pair<Int, Int> {
-        var best = 1 to tiles
+        val n = maxOf(1, tiles)
+        var best = 1 to n
         var bestSide = 0f
-        for (cols in 1..tiles) {
-            val rows = (tiles + cols - 1) / cols
+        for (cols in 1..n) {
+            val rows = (n + cols - 1) / cols
             val side = min(w / cols, h / rows)
             if (side > bestSide + 0.5f) { bestSide = side; best = cols to rows }
         }
         return best
     }
 
-    /** Which note a slot shows, or null for the "+" tile / an empty slot. */
-    fun noteAt(slot: Int, notes: List<StickyData>): StickyData? {
-        val i = if (hasAddTile(notes.size)) slot - 1 else slot
-        return notes.getOrNull(i)
+    /**
+     * Where the + button sits, in the same units as [w]/[h] ([dp] = one dp in those units).
+     * Empty board: a big + in the middle. Otherwise a corner button sized to the notes.
+     */
+    fun addButton(noteCount: Int, w: Float, h: Float, dp: Float): RectF {
+        if (noteCount == 0) {
+            val side = min(w, h) * 0.5f
+            return RectF(w / 2 - side / 2, h / 2 - side / 2, w / 2 + side / 2, h / 2 + side / 2)
+        }
+        val (cols, rows) = grid(noteCount, w, h)
+        val tile = min(w / cols, h / rows)
+        val side = (tile * 0.3f).coerceIn(56 * dp, 104 * dp).coerceAtMost(min(w, h) * 0.45f)
+        val m = 4 * dp
+        return RectF(w - m - side, h - m - side, w - m, h - m)
     }
 }
 
-/** Draws the board: a "+ New note" tile, then each note with a tilt, shadow and curled corner. */
+/** Draws the board: each note with a tilt, shadow and curled corner, plus the floating + button. */
 object StickyRenderer {
 
-    fun render(w: Int, h: Int, notes: List<StickyData>): Bitmap {
+    /** [dp] = pixels per dp in this bitmap (it may be scaled down from the real view). */
+    fun render(w: Int, h: Int, dp: Float, notes: List<StickyData>): Bitmap {
         val bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bmp)
-        val tiles = StickyBoard.tiles(notes.size)
-        val (cols, rows) = StickyBoard.grid(tiles, w.toFloat(), h.toFloat())
-        val cw = w.toFloat() / cols
-        val ch = h.toFloat() / rows
-        for (slot in 0 until tiles) {
-            val cell = RectF((slot % cols) * cw, (slot / cols) * ch, (slot % cols + 1) * cw, (slot / cols + 1) * ch)
-            val note = StickyBoard.noteAt(slot, notes)
-            if (note == null) drawAddTile(canvas, cell, alone = notes.isEmpty()) else drawNote(canvas, cell, note)
+        if (notes.isNotEmpty()) {
+            val (cols, rows) = StickyBoard.grid(notes.size, w.toFloat(), h.toFloat())
+            val cw = w.toFloat() / cols
+            val ch = h.toFloat() / rows
+            notes.forEachIndexed { slot, note ->
+                drawNote(canvas, RectF((slot % cols) * cw, (slot / cols) * ch, (slot % cols + 1) * cw, (slot / cols + 1) * ch), note)
+            }
         }
+        drawPlus(canvas, StickyBoard.addButton(notes.size, w.toFloat(), h.toFloat(), dp))
         return bmp
     }
 
@@ -125,28 +133,17 @@ object StickyRenderer {
         return RectF(cell.centerX() - side / 2, cell.centerY() - side / 2, cell.centerX() + side / 2, cell.centerY() + side / 2)
     }
 
-    private fun drawAddTile(canvas: Canvas, cell: RectF, alone: Boolean) {
-        val rect = square(cell, 0.1f)
-        val s = rect.width()
-        val corner = s * 0.08f
-        canvas.drawRoundRect(rect, corner, corner, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.argb(150, 255, 255, 255) })
-        canvas.drawRoundRect(rect, corner, corner, Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            style = Paint.Style.STROKE; strokeWidth = s * 0.02f; color = Color.argb(140, 0, 0, 0)
-            pathEffect = DashPathEffect(floatArrayOf(s * 0.05f, s * 0.035f), 0f)
+    private fun drawPlus(canvas: Canvas, box: RectF) {
+        val r = box.width() * 0.44f
+        val cx = box.centerX()
+        val cy = box.centerY()
+        canvas.drawCircle(cx, cy, r, Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#1D9E75")
+            setShadowLayer(r * 0.18f, 0f, r * 0.08f, Color.argb(110, 0, 0, 0))
         })
-        // A big round "+" kids can't miss
-        val r = s * 0.2f
-        val cx = rect.centerX()
-        val cy = rect.centerY() - s * 0.08f
-        canvas.drawCircle(cx, cy, r, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#1D9E75") })
-        val plus = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; strokeWidth = r * 0.24f; strokeCap = Paint.Cap.ROUND }
-        canvas.drawLine(cx - r * 0.5f, cy, cx + r * 0.5f, cy, plus)
-        canvas.drawLine(cx, cy - r * 0.5f, cx, cy + r * 0.5f, plus)
-        val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#2C2C2A"); typeface = Paper.handwriting; textAlign = Paint.Align.CENTER
-            textSize = s * if (alone) 0.085f else 0.12f
-        }
-        canvas.drawText(if (alone) "Tap to add a note" else "New note", cx, cy + r + label.textSize * 1.3f, label)
+        val plus = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE; strokeWidth = r * 0.2f; strokeCap = Paint.Cap.ROUND }
+        canvas.drawLine(cx - r * 0.48f, cy, cx + r * 0.48f, cy, plus)
+        canvas.drawLine(cx, cy - r * 0.48f, cx, cy + r * 0.48f, plus)
     }
 
     private fun drawNote(canvas: Canvas, cell: RectF, note: StickyData) {
