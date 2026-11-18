@@ -99,3 +99,6 @@ class MiniWeatherWidgetProvider : BaseWidgetProvider(WidgetKind.MINI_WEATHER)
 
 /** The family sticky board. Notes are shared, so removing a board keeps them. */
 class StickyWidgetProvider : BaseWidgetProvider(WidgetKind.STICKY)
+
+/** The doodle easel: tap to draw. */
+class EaselWidgetProvider : BaseWidgetProvider(WidgetKind.EASEL)

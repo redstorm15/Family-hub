@@ -172,11 +172,11 @@ class StickyEditorActivity : Activity() {
     }
 
     /** A round (pen) or square (paper) color choice with a ring when selected. */
-    class DotView(context: Context, private val color: Int, private val square: Boolean) : View(context) {
+    class DotView(context: Context, private val color: Int, private val square: Boolean, ringColor: Int = Color.WHITE) : View(context) {
         var selectedDot = false
             set(v) { field = v; invalidate() }
         private val fill = Paint(Paint.ANTI_ALIAS_FLAG)
-        private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = Color.WHITE }
+        private val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = ringColor }
 
         override fun onDraw(canvas: Canvas) {
             val s = min(width, height).toFloat()

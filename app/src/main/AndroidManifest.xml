@@ -119,6 +119,26 @@
                 android:resource="@xml/sticky_widget_info" />
         </receiver>
 
+        <receiver
+            android:name=".EaselWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_easel_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/easel_widget_info" />
+        </receiver>
+
+        <activity
+            android:name=".EaselActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+
         <activity
             android:name=".StickyEditorActivity"
             android:exported="false"

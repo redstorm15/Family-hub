@@ -109,3 +109,12 @@ Add the **Sticky notes** widget once and resize it as big as you like. It's a fa
 - Tap outside the note to cancel. Erasing everything and tapping Stick it also removes the note.
 - The board holds 12 notes, newest first, and they grow to fill the board. A 13th note bumps the oldest one.
 - Notes are shared, so two boards show the same notes, and removing a board doesn't lose them.
+
+### Doodle easel
+
+Add the **Doodle easel** widget. It shows the last thing drawn (or a few crayons). Tap it and you're on paper right away.
+
+- Tools: **Crayon**, **Marker**, **Paint** (soft, see-through), **Pencil**, **Eraser**, plus 12 big colors.
+- **One finger draws, two fingers scroll** the endless roll. With the S Pen, the pen draws and one finger scrolls, so a resting hand doesn't scribble. The pen's button-eraser end erases.
+- **⬇ More paper** rolls down to a fresh stretch; **🧻 New paper** clears the whole roll; **↩ Undo**; **✓ Done**.
+- Art isn't saved as files. The roll stays while the tablet is on and resets after a restart or app update.

@@ -13,7 +13,8 @@ enum class WidgetKind(val providerClass: Class<out AppWidgetProvider>) {
     WEATHER(WeatherWidgetProvider::class.java),
     DATE(DateWidgetProvider::class.java),
     MINI_WEATHER(MiniWeatherWidgetProvider::class.java),
-    STICKY(StickyWidgetProvider::class.java);
+    STICKY(StickyWidgetProvider::class.java),
+    EASEL(EaselWidgetProvider::class.java);
 
     fun ids(context: Context): IntArray =
         AppWidgetManager.getInstance(context).getAppWidgetIds(ComponentName(context, providerClass))

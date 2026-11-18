@@ -58,8 +58,8 @@ object WidgetUpdater {
         // from here could cancel it mid-run.)
         Scheduler.scheduleMidnight(context)
         val mgr = AppWidgetManager.getInstance(context)
-        if (kind == WidgetKind.STICKY) {
-            updateSticky(context, mgr, ids)
+        if (kind == WidgetKind.STICKY || kind == WidgetKind.EASEL) {
+            if (kind == WidgetKind.STICKY) updateSticky(context, mgr, ids) else updateEasel(context, mgr, ids)
             return   // no calendar access needed
         }
         if (kind == WidgetKind.WEATHER || kind == WidgetKind.MINI_WEATHER) {
@@ -78,6 +78,7 @@ object WidgetUpdater {
             WidgetKind.DATE -> updateDate(context, mgr, ids)
             WidgetKind.MINI_WEATHER -> updateMiniWeather(context, mgr, ids)
             WidgetKind.STICKY -> updateSticky(context, mgr, ids)
+            WidgetKind.EASEL -> updateEasel(context, mgr, ids)
         }
     }
 
@@ -323,6 +324,26 @@ object WidgetUpdater {
                 }
             }
         }
+    }
+
+    private fun updateEasel(context: Context, mgr: AppWidgetManager, ids: IntArray) {
+        val preview = EaselRoll.preview(context)
+        val density = context.resources.displayMetrics.density
+        val open = PendingIntent.getActivity(
+            context, 400_000,
+            Intent(context, EaselActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        for (id in ids) {
+            pushSizes(context, mgr, id) { wPx, hPx, viewW, _, save ->
+                val uri = save(EaselRenderer.render(wPx, hPx, density * wPx / viewW, preview))
+                RemoteViews(context.packageName, R.layout.widget_day).apply {
+                    setImageViewUri(R.id.calendar_image, uri)
+                    setOnClickPendingIntent(R.id.widget_root, open)
+                }
+            }
+        }
+        preview?.recycle()
     }
 
     private fun stickyIntent(context: Context, widgetId: Int, slot: Int, noteId: Int): PendingIntent {

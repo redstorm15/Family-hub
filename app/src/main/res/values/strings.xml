@@ -13,6 +13,8 @@
     <string name="widget_mini_weather_label">Weather (small)</string>
     <string name="widget_mini_weather_description">Current weather at a glance. Resize from 1×1 up</string>
     <string name="widget_sticky_label">Sticky notes</string>
+    <string name="widget_easel_label">Doodle easel</string>
+    <string name="widget_easel_description">Tap to draw on an endless roll of paper</string>
     <string name="widget_sticky_description">A family sticky board. Tap + to draw or write a note</string>
     <string name="widget_loading">Loading calendar…</string>
     <string name="widget_needs_permission">Tap to allow calendar access</string>
