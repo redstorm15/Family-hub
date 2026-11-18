@@ -22,11 +22,17 @@ import java.util.Locale
 
 /** Aquarium checklist: big ✓ buttons, "done on…" for catching up, and editable chores. */
 class AquariumActivity : Activity() {
-    private val ink = Color.parseColor("#12313F")
-    private val muted = Color.parseColor("#5C7380")
-    private val sea = Color.parseColor("#1B6F8C")
-    private val orange = Color.parseColor("#E07B24")
-    private val green = Color.parseColor("#1D9E75")
+    private var dark = false
+    private fun pick(day: String, night: String) = Color.parseColor(if (dark) night else day)
+    private val ink get() = pick("#12313F", "#E4F0F4")
+    private val muted get() = pick("#5C7380", "#8FA8B3")
+    private val sea get() = pick("#1B6F8C", "#2A8DB0")
+    private val orange get() = pick("#E07B24", "#F29A4A")
+    private val green get() = pick("#1D9E75", "#2BB389")
+    private val surface get() = pick("#FFFFFF", "#1C2A31")
+    private val soft get() = pick("#F7FBFC", "#17232A")
+    private val pageBg get() = pick("#EEF6F9", "#0F181D")
+    private val stroke get() = pick("#CFE0E7", "#2C3D45")
     private lateinit var list: LinearLayout
     private val fmt = DateTimeFormatter.ofPattern("EEE MMM d", Locale.getDefault())
     private val today get() = LocalDate.now()
@@ -34,8 +40,10 @@ class AquariumActivity : Activity() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        dark = Prefs.isDark(this)
+        setTheme(if (dark) android.R.style.Theme_DeviceDefault_NoActionBar else android.R.style.Theme_DeviceDefault_Light_NoActionBar)
         super.onCreate(savedInstanceState)
-        val scroll = ScrollView(this).apply { setBackgroundColor(Color.parseColor("#EEF6F9")) }
+        val scroll = ScrollView(this).apply { setBackgroundColor(pageBg) }
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(18), dp(20), dp(28)) }
         scroll.addView(list)
         setContentView(scroll)
@@ -70,7 +78,7 @@ class AquariumActivity : Activity() {
         list.addView(text("Coming up", 20f, ink, bold = true), lp(top = 22))
         tasks.filter { it !in dueNow }.sortedBy { it.due }.forEach { list.addView(taskCard(it, highlight = false), full(top = 10)) }
 
-        list.addView(pill("＋ Add a chore", Color.WHITE, ink) { editTask(null) }, lp(top = 18))
+        list.addView(pill("＋ Add a chore", surface, ink) { editTask(null) }, lp(top = 18))
         list.addView(text("Tip: never replace all the filter media at once, which keeps the good bacteria.", 14f, muted), lp(top = 14))
     }
 
@@ -79,7 +87,7 @@ class AquariumActivity : Activity() {
         val card = LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(dp(16), dp(12), dp(12), dp(12))
-            background = rounded(if (highlight) Color.WHITE else Color.parseColor("#F7FBFC"), 18).apply {
+            background = rounded(if (highlight) surface else soft, 18).apply {
                 if (overdue) setStroke(dp(2), orange)
             }
         }
@@ -95,8 +103,8 @@ class AquariumActivity : Activity() {
         if (t.note.isNotBlank()) info.addView(text(t.note, 13f, muted))
         info.setOnClickListener { editTask(t) }
         card.addView(info, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-        card.addView(pill("📅", Color.WHITE, ink) { pickDate(t) }, lp(end = 8))
-        card.addView(pill("✓", if (highlight) green else Color.WHITE, if (highlight) Color.WHITE else green) {
+        card.addView(pill("📅", surface, ink) { pickDate(t) }, lp(end = 8))
+        card.addView(pill("✓", if (highlight) green else surface, if (highlight) Color.WHITE else green) {
             TankStore.markDone(this, t.id, today); render()
         })
         return card
@@ -161,7 +169,7 @@ class AquariumActivity : Activity() {
     private fun pill(label: String, bg: Int, fg: Int, onClick: () -> Unit) = text(label, 17f, fg, bold = true).apply {
         gravity = Gravity.CENTER
         setPadding(dp(18), dp(12), dp(18), dp(12))
-        background = rounded(bg, 24).apply { if (bg == Color.WHITE) setStroke(dp(1), Color.parseColor("#CFE0E7")) }
+        background = rounded(bg, 24).apply { if (bg == surface) setStroke(dp(1), stroke) }
         setOnClickListener { onClick() }
     }
 

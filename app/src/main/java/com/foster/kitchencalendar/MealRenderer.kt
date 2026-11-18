@@ -30,13 +30,15 @@ data class MealSpec(
  * Protein | Grain | Fruit/veg, and the rest of the week when there's room. Tap opens the planner.
  */
 object MealRenderer {
-    private val bg = Color.parseColor("#FFF8EE")
-    private val ink = Color.parseColor("#2C2C2A")
-    private val muted = Color.parseColor("#7A746B")
-    private val accent = Color.parseColor("#E8833A")
-    private val tryInk = Color.parseColor("#7F55C9")
-    private val tryBg = Color.parseColor("#EEE7FA")
-    private val boxBg = Color.parseColor("#F4ECDF")
+    // Day colors, or warm night colors when Themes.dark is on.
+    private val bg get() = Color.parseColor(if (Themes.dark) "#1E1A16" else "#FFF8EE")
+    private val ink get() = Color.parseColor(if (Themes.dark) "#F1EAE0" else "#2C2C2A")
+    private val muted get() = Color.parseColor(if (Themes.dark) "#A69C8F" else "#7A746B")
+    private val accent get() = Color.parseColor(if (Themes.dark) "#F2A05E" else "#E8833A")
+    private val tryInk get() = Color.parseColor(if (Themes.dark) "#C9B2F2" else "#7F55C9")
+    private val tryBg get() = Color.parseColor(if (Themes.dark) "#352B48" else "#EEE7FA")
+    private val boxBg get() = Color.parseColor(if (Themes.dark) "#2B251F" else "#F4ECDF")
+    private val rule get() = Color.parseColor(if (Themes.dark) "#352E27" else "#EFE6D8")
 
     private fun paint(sz: Float, face: Typeface, color: Int = ink, align: Paint.Align = Paint.Align.LEFT) =
         Paint(Paint.ANTI_ALIAS_FLAG).apply { textSize = sz; typeface = face; this.color = color; textAlign = align }
@@ -89,7 +91,7 @@ object MealRenderer {
         val rowH = (listArea.height() - bannerH - (if (bannerH > 0) pad * 0.5f else 0f)) / rows.size
         val dayP = paint(min(rowH * 0.34f, 17 * unit), Draw.bold, muted)
         val mealP = paint(min(rowH * 0.4f, 20 * unit), Draw.medium)
-        val line = Paint().apply { color = Color.parseColor("#EFE6D8"); strokeWidth = unit }
+        val line = Paint().apply { color = rule; strokeWidth = unit }
         rows.forEachIndexed { i, (date, plan) ->
             val top = listArea.top + i * rowH
             val cy = top + rowH / 2

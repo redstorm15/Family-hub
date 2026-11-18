@@ -146,6 +146,22 @@ class SettingsActivity : Activity() {
                 }
             })
 
+            heading("Dark mode")
+            para("Widgets go dark at night. \"Follow the tablet\" works with Settings › Display › Dark mode on a sunset-to-sunrise schedule (widgets catch up within 15 minutes).")
+            root.addView(RadioGroup(this).apply {
+                orientation = LinearLayout.VERTICAL
+                listOf("Follow the tablet", "Always light", "Always dark").forEachIndexed { i, label ->
+                    addView(RadioButton(this@SettingsActivity).apply {
+                        id = View.generateViewId(); text = label; textSize = 16f; tag = i
+                        isChecked = Prefs.darkMode(this@SettingsActivity) == i
+                    })
+                }
+                setOnCheckedChangeListener { group, checkedId ->
+                    val index = group.findViewById<RadioButton>(checkedId)?.tag as? Int ?: return@setOnCheckedChangeListener
+                    Prefs.setDarkMode(this@SettingsActivity, index); Scheduler.refreshAll(this@SettingsActivity)
+                }
+            })
+
             buildWeatherSection(root, { heading(it) }, { para(it) })
 
             root.addView(View(this), LinearLayout.LayoutParams(1, dp(16)))

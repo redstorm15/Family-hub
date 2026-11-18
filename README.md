@@ -161,3 +161,7 @@ Seeded for the 29 gal + Fluval 307 (installed Sep 27, 2026), last water change N
 | Replace impeller, lube O-rings | yearly |
 
 Chores are grouped by weekend: anything due by Sunday shows as "this weekend".
+
+### Dark mode
+
+Settings › **Dark mode**: *Follow the tablet* (default), *Always light* or *Always dark*. With the tablet's dark mode on a sunset-to-sunrise schedule, the month, week, today, date and dinner widgets switch to night colors within 15 minutes (tap any widget to redraw right away). Each month keeps its accent colors and art on a charcoal base. The dinner planner and aquarium screens follow the same setting. Weather, indoor air, aquarium and Watch widgets were already dark; sticky notes and the easel stay paper-colored on purpose.

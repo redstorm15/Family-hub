@@ -34,12 +34,23 @@ import java.util.Locale
  */
 class MealPlanActivity : Activity() {
 
-    private val ink = Color.parseColor("#2C2C2A")
-    private val muted = Color.parseColor("#6E6A63")
-    private val accent = Color.parseColor("#E8833A")
-    private val tryInk = Color.parseColor("#7F55C9")
-    private val tryBg = Color.parseColor("#EEE7FA")
-    private val green = Color.parseColor("#1D9E75")
+    // Day / night palette (night follows the same setting as the widgets).
+    private var dark = false
+    private fun pick(day: String, night: String) = Color.parseColor(if (dark) night else day)
+    private val ink get() = pick("#2C2C2A", "#F1EAE0")
+    private val muted get() = pick("#6E6A63", "#A69C8F")
+    private val accent get() = pick("#E8833A", "#F2A05E")
+    private val tryInk get() = pick("#7F55C9", "#C9B2F2")
+    private val tryBg get() = pick("#EEE7FA", "#352B48")
+    private val green get() = pick("#1D9E75", "#2BB389")
+    private val surface get() = pick("#FFFFFF", "#2A241F")       // cards, white pills
+    private val pageBg get() = pick("#FFF8EE", "#1A1612")
+    private val todayCard get() = pick("#FFE9D2", "#3A2C1F")
+    private val tryCard get() = pick("#F6F1FD", "#2A2337")
+    private val box get() = pick("#F7F2EA", "#332C25")
+    private val chipBg get() = pick("#F4EFE7", "#332C25")
+    private val mealTile get() = pick("#FFF1E2", "#3A2F24")
+    private val stroke get() = pick("#E5DED3", "#463D34")
     private lateinit var list: LinearLayout
     private val today get() = LocalDate.now()
     private var photoMealId: String? = null
@@ -52,9 +63,11 @@ class MealPlanActivity : Activity() {
     private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        dark = Prefs.isDark(this)
+        setTheme(if (dark) android.R.style.Theme_DeviceDefault_NoActionBar else android.R.style.Theme_DeviceDefault_Light_NoActionBar)
         super.onCreate(savedInstanceState)
         photoMealId = savedInstanceState?.getString("photoMeal")
-        val scroll = ScrollView(this).apply { setBackgroundColor(Color.parseColor("#FFF8EE")) }
+        val scroll = ScrollView(this).apply { setBackgroundColor(pageBg) }
         list = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(20), dp(18), dp(20), dp(28)) }
         scroll.addView(list)
         setContentView(scroll)
@@ -81,8 +94,8 @@ class MealPlanActivity : Activity() {
         list.addView(top)
         val actions = LinearLayout(this).apply { setPadding(0, dp(10), 0, dp(6)) }
         actions.addView(pill("✨ Fill the week", accent, Color.WHITE) { MealStore.fillWeek(this, today); render() }, lp(end = 10))
-        actions.addView(pill("🔁 Repeat last week", Color.WHITE, ink) { MealStore.repeatLastWeek(this, today); render() }, lp(end = 10))
-        actions.addView(pill("🧺 Meal bank & photos", Color.WHITE, ink) { editBank() }, lp(end = 10))
+        actions.addView(pill("🔁 Repeat last week", surface, ink) { MealStore.repeatLastWeek(this, today); render() }, lp(end = 10))
+        actions.addView(pill("🧺 Meal bank & photos", surface, ink) { editBank() }, lp(end = 10))
         list.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(actions) })
 
         val pending = MealStore.pendingFeedback(this, today)
@@ -94,7 +107,7 @@ class MealPlanActivity : Activity() {
         if (wins.isNotEmpty()) {
             list.addView(text("🏆  New foods tried", 18f, ink, bold = true), lp(top = 22))
             val row = LinearLayout(this).apply { setPadding(0, dp(8), 0, 0) }
-            wins.take(30).forEach { w -> row.addView(chip("${w.result?.emoji ?: "🙂"} ${w.item.emoji} ${w.item.name}", Color.WHITE, ink), lp(end = 8)) }
+            wins.take(30).forEach { w -> row.addView(chip("${w.result?.emoji ?: "🙂"} ${w.item.emoji} ${w.item.name}", surface, ink), lp(end = 8)) }
             list.addView(HorizontalScrollView(this).apply { isHorizontalScrollBarEnabled = false; addView(row) })
         }
         list.addView(text("Backup plate on try nights: ${MealStore.backup(this)}  ✏️", 15f, muted).apply {
@@ -108,7 +121,7 @@ class MealPlanActivity : Activity() {
         val card = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(12), dp(16), dp(14))
-            background = rounded(if (plan.tryNight) Color.parseColor("#F6F1FD") else if (isToday) Color.parseColor("#FFE9D2") else Color.WHITE, 18)
+            background = rounded(if (plan.tryNight) tryCard else if (isToday) todayCard else surface, 18)
         }
         val head = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL }
         val dayName = if (isToday) "Tonight" else date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
@@ -120,7 +133,7 @@ class MealPlanActivity : Activity() {
             LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f),
         )
         if (meal?.homeCooked == true) {
-            head.addView(pill(if (plan.tryNight) "✨ Try night" else "✨ Try night?", if (plan.tryNight) tryInk else Color.WHITE,
+            head.addView(pill(if (plan.tryNight) "✨ Try night" else "✨ Try night?", if (plan.tryNight) tryInk else surface,
                 if (plan.tryNight) Color.WHITE else tryInk) {
                 if (plan.tryNight) MealStore.setTryNight(this, date, false) else MealStore.makeTryNight(this, date)
                 render()
@@ -141,7 +154,7 @@ class MealPlanActivity : Activity() {
         val foot = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(8), 0, 0) }
         val extra = plan.parts[Part.EXTRA]
         foot.addView(chip(extra?.let { "${if (it.isNew) "✨ " else ""}${it.emoji} ${it.name}" } ?: "＋ Dip / sauce",
-            if (extra?.isNew == true) tryBg else Color.parseColor("#F4EFE7"), if (extra?.isNew == true) tryInk else muted).apply {
+            if (extra?.isNew == true) tryBg else chipBg, if (extra?.isNew == true) tryInk else muted).apply {
             setOnClickListener { pickPart(date, Part.EXTRA) }
         })
         val differs = plan.parts.filterValues { !it.isNew } != meal.usual && plan.newItems.isEmpty()
@@ -159,7 +172,7 @@ class MealPlanActivity : Activity() {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(10), dp(8), dp(10), dp(10))
-            background = rounded(if (item?.isNew == true) tryBg else Color.parseColor("#F7F2EA"), 14)
+            background = rounded(if (item?.isNew == true) tryBg else box, 14)
             setOnClickListener { pickPart(date, part) }
         }
         box.addView(text(if (item?.isNew == true) "✨ NEW ${part.short.uppercase()}" else part.short.uppercase(), 11f,
@@ -182,7 +195,7 @@ class MealPlanActivity : Activity() {
             val row = LinearLayout(this).apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(10), 0, 0) }
             row.addView(text("${rec.item.emoji}  ${rec.item.name}", 17f, ink), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             TryResult.entries.forEach { r ->
-                row.addView(pill("${r.emoji} ${r.label}", Color.WHITE, ink) { MealStore.recordResult(this, rec, r); render() }, lp(end = 6))
+                row.addView(pill("${r.emoji} ${r.label}", surface, ink) { MealStore.recordResult(this, rec, r); render() }, lp(end = 6))
             }
             card.addView(row, full())
         }
@@ -203,10 +216,10 @@ class MealPlanActivity : Activity() {
             setOnClickListener { onClick(); dialog.dismiss() }
         }
         MealStore.bank(this).forEach { m ->
-            grid.addView(tile("${m.emoji}  ${m.name}", Color.parseColor("#FFF1E2"), ink) { MealStore.setMeal(this, date, m); render() }, gridParams())
+            grid.addView(tile("${m.emoji}  ${m.name}", mealTile, ink) { MealStore.setMeal(this, date, m); render() }, gridParams())
         }
-        grid.addView(tile("＋  New dinner", Color.WHITE, accent) { addMeal { MealStore.setMeal(this, date, it); render() } }, gridParams())
-        grid.addView(tile("Clear night", Color.WHITE, muted) { MealStore.setMeal(this, date, null); render() }, gridParams())
+        grid.addView(tile("＋  New dinner", surface, accent) { addMeal { MealStore.setMeal(this, date, it); render() } }, gridParams())
+        grid.addView(tile("Clear night", surface, muted) { MealStore.setMeal(this, date, null); render() }, gridParams())
         dialog = AlertDialog.Builder(this).setTitle(date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault()))
             .setView(ScrollView(this).apply { addView(grid) }).setNegativeButton("Cancel", null).create()
         dialog.show()
@@ -231,8 +244,8 @@ class MealPlanActivity : Activity() {
         }
         box.addView(newGrid)
         val newRow = LinearLayout(this).apply { setPadding(dp(5), dp(4), 0, dp(8)) }
-        newRow.addView(pill("🔀 Other ideas", Color.WHITE, ink) { dialog.dismiss(); pickPart(date, part, page + 1) }, lp(end = 8))
-        newRow.addView(pill("✏️ Type a new one", Color.WHITE, ink) {
+        newRow.addView(pill("🔀 Other ideas", surface, ink) { dialog.dismiss(); pickPart(date, part, page + 1) }, lp(end = 8))
+        newRow.addView(pill("✏️ Type a new one", surface, ink) {
             dialog.dismiss()
             ask("New ${part.label.lowercase()}", "e.g. roasted carrots") { choose(PlateItem(it, "✨", true)) }
         })
@@ -242,17 +255,17 @@ class MealPlanActivity : Activity() {
         val grid = GridLayout(this).apply { columnCount = 3 }
         PlateFoods.usual[part].orEmpty().forEach { f ->
             grid.addView(text("${f.emoji}  ${f.name}", 15f, ink).apply {
-                setPadding(dp(10), dp(10), dp(10), dp(10)); background = rounded(Color.parseColor("#F7F2EA"), 12); maxLines = 2
+                setPadding(dp(10), dp(10), dp(10), dp(10)); background = rounded(box, 12); maxLines = 2
                 setOnClickListener { choose(f) }
             }, gridParams())
         }
         box.addView(grid)
         val bottom = LinearLayout(this).apply { setPadding(dp(5), dp(8), 0, 0) }
-        bottom.addView(pill("✏️ Type one", Color.WHITE, ink) {
+        bottom.addView(pill("✏️ Type one", surface, ink) {
             dialog.dismiss()
             ask(part.label, "e.g. pierogies") { choose(PlateItem(it, "🍽️")) }
         }, lp(end = 8))
-        bottom.addView(pill("None", Color.WHITE, muted) { choose(null) })
+        bottom.addView(pill("None", surface, muted) { choose(null) })
         box.addView(bottom)
 
         dialog = AlertDialog.Builder(this).setTitle(part.label).setView(ScrollView(this).apply { addView(box) })
@@ -269,10 +282,10 @@ class MealPlanActivity : Activity() {
         val views = mutableListOf<TextView>()
         MEAL_EMOJI.forEach { e ->
             val v = text(e, 26f, ink).apply { gravity = Gravity.CENTER; setPadding(dp(5), dp(5), dp(5), dp(5)) }
-            v.background = rounded(if (e == chosen) Color.parseColor("#FFE9D2") else Color.TRANSPARENT, 12)
+            v.background = rounded(if (e == chosen) todayCard else Color.TRANSPARENT, 12)
             v.setOnClickListener {
                 chosen = e
-                views.forEach { o -> o.background = rounded(if (o === v) Color.parseColor("#FFE9D2") else Color.TRANSPARENT, 12) }
+                views.forEach { o -> o.background = rounded(if (o === v) todayCard else Color.TRANSPARENT, 12) }
             }
             views += v
             grid.addView(v)
@@ -296,13 +309,13 @@ class MealPlanActivity : Activity() {
         bank.forEach { m ->
             val row = LinearLayout(this).apply {
                 gravity = Gravity.CENTER_VERTICAL; setPadding(dp(8), dp(8), dp(8), dp(8))
-                background = rounded(Color.parseColor("#FFF1E2"), 14)
+                background = rounded(mealTile, 14)
                 setOnClickListener { dialog.dismiss(); mealOptions(m) }
             }
             val thumb = MealStore.photo(this, m.id)
             if (thumb != null) row.addView(ImageView(this).apply {
                 setImageBitmap(thumb); scaleType = ImageView.ScaleType.CENTER_CROP
-                clipToOutline = true; background = rounded(Color.WHITE, 10)
+                clipToOutline = true; background = rounded(surface, 10)
             }, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(10) })
             else row.addView(text(m.emoji, 30f, ink).apply { gravity = Gravity.CENTER }, LinearLayout.LayoutParams(dp(48), dp(48)).apply { marginEnd = dp(10) })
             row.addView(text(m.name, 18f, ink, bold = true), LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
@@ -396,7 +409,7 @@ class MealPlanActivity : Activity() {
 
     private fun pill(label: String, bg: Int, fg: Int, onClick: () -> Unit) = text(label, 16f, fg, bold = true).apply {
         setPadding(dp(16), dp(10), dp(16), dp(10))
-        background = rounded(bg, 24).apply { if (bg == Color.WHITE) setStroke(dp(1), Color.parseColor("#E5DED3")) }
+        background = rounded(bg, 24).apply { if (bg == surface) setStroke(dp(1), stroke) }
         setOnClickListener { onClick() }
     }
 

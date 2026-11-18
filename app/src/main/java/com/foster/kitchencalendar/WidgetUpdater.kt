@@ -51,7 +51,11 @@ object WidgetUpdater {
     }
 
     private fun update(context: Context, kind: WidgetKind, ids: IntArray) {
-        val ticking = listOf(WidgetKind.DAY, WidgetKind.WEATHER, WidgetKind.DATE, WidgetKind.MINI_WEATHER, WidgetKind.INDOOR)
+        Themes.dark = Prefs.isDark(context)
+        Prefs.setLastDrawnDark(context, Themes.dark)
+        // The tick also catches dark-mode flips, so widgets that change color keep it running too.
+        val ticking = listOf(WidgetKind.DAY, WidgetKind.WEATHER, WidgetKind.DATE, WidgetKind.MINI_WEATHER, WidgetKind.INDOOR,
+            WidgetKind.MONTH, WidgetKind.WEEK, WidgetKind.MEALS)
         if (kind in ticking) Scheduler.scheduleTick(context, ticking.any { it.ids(context).isNotEmpty() })
         if (ids.isEmpty()) return
         // Re-arm tomorrow's redraw. (The calendar-change job re-arms itself; scheduling it

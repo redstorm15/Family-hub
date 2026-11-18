@@ -4,6 +4,22 @@ import android.content.Context
 import android.content.SharedPreferences
 
 object Prefs {
+    /** 0 = follow the tablet's dark mode, 1 = always light, 2 = always dark. */
+    fun darkMode(context: Context) = sp(context).getInt("dark_mode", 0).coerceIn(0, 2)
+    fun setDarkMode(context: Context, v: Int) = sp(context).edit().putInt("dark_mode", v.coerceIn(0, 2)).apply()
+
+    /** Whether widgets and screens should draw dark right now. */
+    fun isDark(context: Context): Boolean = when (darkMode(context)) {
+        1 -> false
+        2 -> true
+        else -> (android.content.res.Resources.getSystem().configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK) == android.content.res.Configuration.UI_MODE_NIGHT_YES
+    }
+
+    /** What the widgets were last drawn as, so the 15-minute tick can catch sunset/sunrise. */
+    fun lastDrawnDark(context: Context) = sp(context).getBoolean("last_dark", false)
+    fun setLastDrawnDark(context: Context, v: Boolean) = sp(context).edit().putBoolean("last_dark", v).apply()
+
     private fun sp(context: Context): SharedPreferences =
         context.getSharedPreferences("kitchen_calendar", Context.MODE_PRIVATE)
 

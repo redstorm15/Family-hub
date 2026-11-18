@@ -70,6 +70,12 @@ class MonthWidgetProvider : BaseWidgetProvider(WidgetKind.MONTH) {
             ACTION_TICK -> {
                 // Moves the day view's "now" line and "Up next", and refreshes weather.
                 val pending = goAsync()
+                // Dark mode flipped (sunset/sunrise schedule)? Redraw everything once.
+                val dark = Prefs.isDark(context)
+                if (dark != Prefs.lastDrawnDark(context)) {
+                    Prefs.setLastDrawnDark(context, dark)
+                    WidgetUpdater.request(context)
+                }
                 WidgetUpdater.request(context, WidgetKind.DAY)
                 WidgetUpdater.request(context, WidgetKind.DATE)
                 WidgetUpdater.request(context, WidgetKind.MINI_WEATHER)

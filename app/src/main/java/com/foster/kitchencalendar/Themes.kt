@@ -28,8 +28,36 @@ object Themes {
     private val white = c("#FFFFFF")
     private val paper = c("#F1EFE8")
 
-    /** Index 1..12 (java.time month value). */
-    fun forMonth(month: Int): MonthTheme = all[(month - 1).coerceIn(0, 11)]
+    /** Set by the widget updater before each draw: true = night colors. */
+    @Volatile var dark = false
+
+    /** Index 1..12 (java.time month value). Dark variant when [dark] is on. */
+    fun forMonth(month: Int): MonthTheme = all[(month - 1).coerceIn(0, 11)].let { if (dark) night(it) else it }
+
+    private val nightCache = HashMap<MonthTheme, MonthTheme>()
+
+    /**
+     * Night version of a month: charcoal body and cells with a hint of the month's color,
+     * a deeper header, light text, and the same accents and motifs.
+     */
+    fun night(t: MonthTheme): MonthTheme = synchronized(nightCache) {
+        nightCache.getOrPut(t) {
+            val header = Motif.blend(t.headerBg, c("#000000"), 0.38f)
+            val today = if (Draw.luminance(t.todayFill) < 0.22) Motif.blend(t.todayFill, white, 0.3f) else t.todayFill
+            t.copy(
+                headerBg = header,
+                headerText = Draw.onColor(header),
+                bodyBg = Motif.blend(c("#151517"), t.headerBg, 0.10f),
+                cellBg = Motif.blend(c("#232327"), t.headerBg, 0.09f),
+                outCellBg = Motif.blend(c("#1B1B1E"), t.headerBg, 0.05f),
+                dayText = c("#ECEAE4"),
+                mutedText = c("#8E8B85"),
+                todayFill = today,
+                todayText = Draw.onColor(today),
+                decoColors = t.decoColors.map { Motif.blend(it, c("#000000"), 0.22f) },
+            )
+        }
+    }
 
     val all: List<MonthTheme> = listOf(
         // January — winter wonderland
