@@ -65,12 +65,21 @@ object PeopleStore {
         val selected = Prefs.selectedCalendars(c)
         return CalendarRepository.listCalendars(c)
             .filter { if (selected != null) it.id in selected else it.visible }
+            .filter { !isBanner(it.name) }
             .map { cal -> Person("cal${cal.id}", prettyName(cal.name), cal.color or 0xFF000000.toInt(), setOf(cal.id)) }
     }
 
-    /** "nick.foster@gmail.com" → "Nick". */
+    /** Holiday and birthday calendars aren't people: they show up next to the date instead. */
+    fun isBanner(calendarName: String): Boolean {
+        val n = calendarName.lowercase()
+        return "holiday" in n || "birthday" in n
+    }
+
+    /** "nick.foster@gmail.com" → "Nick", "Elaina's Calendar" → "Elaina". */
     fun prettyName(raw: String): String {
-        val base = raw.substringBefore('@').substringBefore('.').replace('_', ' ').trim()
+        var base = raw.trim()
+        if ('@' in base) base = base.substringBefore('@').substringBefore('.').replace('_', ' ')
+        base = base.replace(Regex("(?i)['’]s\\s+cal(endar)?$"), "").replace(Regex("(?i)\\s+calendar$"), "").trim()
         return base.replaceFirstChar { it.uppercase() }.ifBlank { raw }
     }
 
@@ -102,6 +111,7 @@ data class PeopleSpec(
     val date: LocalDate,
     val nowMillis: Long,
     val columns: List<PersonColumn>,
+    val banners: List<CalEvent>,          // holidays, birthdays: shown beside the date
     val use24h: Boolean,
     val zone: ZoneId,
     val textScale: Float,
@@ -126,9 +136,31 @@ object PeopleRenderer {
         val dow = spec.date.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.getDefault())
         val month = spec.date.month.getDisplayName(TextStyle.FULL, Locale.getDefault())
         val title = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = theme.headerText; typeface = Draw.bold; textSize = min(headerH * 0.5f, u * 1.7f) }
-        c.drawText("Today · $dow, $month ${spec.date.dayOfMonth}", pad * 1.5f, Draw.centerBaseline(title, headerH / 2 + pad * 0.3f), title)
-        Draw.decorations(c, w.toFloat(), headerH, spec.date.toEpochDay().toInt(), theme,
-            keepClear = listOf(RectF(0f, 0f, pad * 2 + title.measureText("Today · $dow, $month ${spec.date.dayOfMonth}"), headerH)))
+        val dateText = "Today · $dow, $month ${spec.date.dayOfMonth}"
+        val titleY = Draw.centerBaseline(title, headerH / 2 + pad * 0.3f)
+        c.drawText(dateText, pad * 1.5f, titleY, title)
+        val dateRight = pad * 1.5f + title.measureText(dateText)
+        if (spec.banners.isEmpty()) {
+            Draw.decorations(c, w.toFloat(), headerH, spec.date.toEpochDay().toInt(), theme,
+                keepClear = listOf(RectF(0f, 0f, dateRight + pad, headerH)))
+        } else {
+            // Holidays and birthdays as pills next to the date: "🎉 Thanksgiving"
+            val bp = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Draw.bold; textSize = title.textSize * 0.62f }
+            val pillH = bp.textSize * 1.9f
+            var x = dateRight + pad * 1.5f
+            val cy = headerH / 2 + pad * 0.3f
+            for (e in spec.banners.distinctBy { it.title }) {
+                val label = (if ("birthday" in e.title.lowercase()) "🎂 " else "🎉 ") + e.title
+                val room = w - pad * 1.5f - x
+                if (room < bp.textSize * 5) break
+                val text = Draw.ellipsize(label, bp, room - bp.textSize * 1.2f)
+                val r = RectF(x, cy - pillH / 2, x + bp.measureText(text) + bp.textSize * 1.2f, cy + pillH / 2)
+                c.drawRoundRect(r, pillH / 2, pillH / 2, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = theme.todayFill })
+                bp.color = Draw.onColor(theme.todayFill)
+                c.drawText(text, r.left + bp.textSize * 0.6f, Draw.centerBaseline(bp, cy), bp)
+                x = r.right + pad
+            }
+        }
 
         val body = RectF(pad * 0.5f, headerH, w - pad * 0.5f, h - pad * 0.5f)
         c.drawRoundRect(body, pad, pad, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = theme.bodyBg })
@@ -161,26 +193,51 @@ object PeopleRenderer {
         }
         var y = avatarCy + avatarR + nameP.textSize * 1.9f
 
-        // ----- All-day row (one chip per person, "+n" if more) -----
-        val allDayH = u * 1.5f
-        if (cols.any { col -> col.events.any { it.allDay } }) {
-            val chipP = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Draw.medium; textSize = allDayH * 0.56f }
+        // ----- All-day row: full-width chips that flow across, each tagged with whose it is -----
+        val allDay = cols.flatMap { col -> col.events.filter { it.allDay }.map { col to it } }
+        if (allDay.isNotEmpty()) {
+            val chipH = u * 2.1f
+            val chipP = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Draw.bold; textSize = chipH * 0.46f }
+            val gap = u * 0.45f
+            val left = area.left + u * 0.6f
+            val right = area.right - u * 0.6f
+            var x = left
+            var row = 0
             val maxRows = 2
-            cols.forEachIndexed { i, col ->
-                val ad = col.events.filter { it.allDay }
-                val x1 = lanesLeft + laneW * i + u * 0.2f
-                val x2 = lanesLeft + laneW * (i + 1) - u * 0.2f
-                ad.take(maxRows).forEachIndexed { k, e ->
-                    val r = RectF(x1, y + k * (allDayH + u * 0.25f), x2, y + k * (allDayH + u * 0.25f) + allDayH)
-                    val bg = Draw.eventColor(e, theme)
-                    c.drawRoundRect(r, allDayH * 0.25f, allDayH * 0.25f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = bg })
-                    chipP.color = Draw.onColor(bg)
-                    val label = if (k == maxRows - 1 && ad.size > maxRows) "+${ad.size - k} more" else e.title
-                    c.drawText(Draw.ellipsize(label, chipP, r.width() - u * 0.5f), r.left + u * 0.3f, Draw.centerBaseline(chipP, r.centerY()), chipP)
+            y += u * 0.2f
+            for ((k, pair) in allDay.withIndex()) {
+                val (col, e) = pair
+                val bg = Draw.eventColor(e, theme)
+                val dotR = chipH * 0.3f
+                val lastSlot = row == maxRows - 1
+                val remaining = allDay.size - k
+                var label = e.title
+                var w0 = chipP.measureText(label) + dotR * 2 + chipH * 0.9f
+                if (x + min(w0, right - left) > right && x > left) {
+                    row++; x = left
+                    if (row >= maxRows) break
                 }
+                if (lastSlot && remaining > 1 && x + w0 > right - chipH * 2.5f) {
+                    label = "+$remaining more"; w0 = chipP.measureText(label) + chipH * 0.9f
+                }
+                val r = RectF(x, y + row * (chipH + gap), min(right, x + w0), y + row * (chipH + gap) + chipH)
+                c.drawRoundRect(r, chipH / 2, chipH / 2, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = bg })
+                var tx = r.left + chipH * 0.35f
+                if (!label.startsWith("+")) {
+                    // whose: a small circle with their initial (or 🏠)
+                    val dc = tx + dotR
+                    c.drawCircle(dc, r.centerY(), dotR, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = col.person.color })
+                    c.drawCircle(dc, r.centerY(), dotR, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = u * 0.1f; color = Draw.onColor(bg) })
+                    val ip = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Draw.onColor(col.person.color); typeface = Draw.bold; textSize = dotR * 1.1f; textAlign = Paint.Align.CENTER }
+                    c.drawText(if (col.family) "🏠" else col.person.name.take(1).uppercase(), dc, Draw.centerBaseline(ip, r.centerY()), ip)
+                    tx += dotR * 2 + chipH * 0.2f
+                }
+                chipP.color = Draw.onColor(bg)
+                c.drawText(Draw.ellipsize(label, chipP, r.right - tx - chipH * 0.3f), tx, Draw.centerBaseline(chipP, r.centerY()), chipP)
+                x = r.right + gap
+                if (label.startsWith("+")) break
             }
-            val rowsUsed = cols.maxOf { col -> min(maxRows, col.events.count { it.allDay }) }
-            y += rowsUsed * (allDayH + u * 0.25f) + u * 0.2f
+            y += (row.coerceAtMost(maxRows - 1) + 1) * (chipH + gap) + u * 0.2f
         }
 
         // ----- Timeline -----

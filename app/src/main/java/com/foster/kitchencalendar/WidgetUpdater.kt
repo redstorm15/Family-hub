@@ -449,6 +449,7 @@ object WidgetUpdater {
         val people = PeopleStore.people(context)
         val selected = Prefs.selectedCalendars(context)
         val owned = people.flatMap { it.calendarIds }.toSet()
+        val bannerCals = CalendarRepository.listCalendars(context).filter { PeopleStore.isBanner(it.name) && it.id !in owned }.map { it.id }.toSet()
         val wanted: Set<Long>? = if (selected == null) null else selected + owned
         val startMs = today.atStartOfDay(zone).toInstant().toEpochMilli()
         val endMs = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
@@ -458,11 +459,12 @@ object WidgetUpdater {
             PersonColumn(p, PeopleStore.photo(context, p.id), family = false, events = todays.filter { it.calendarId in p.calendarIds })
         }.toMutableList()
         // Shared calendars nobody owns (e.g. "Family") get their own column when they have something today.
-        val shared = todays.filter { it.calendarId !in owned }
+        val shared = todays.filter { it.calendarId !in owned && it.calendarId !in bannerCals }
+        val banners = todays.filter { it.calendarId in bannerCals }
         if (PeopleStore.showFamily(context) && shared.isNotEmpty()) {
             columns.add(0, PersonColumn(Person("family", "Family", Themes.forMonth(today.monthValue).todayFill, emptySet()), null, true, shared))
         }
-        val spec = PeopleSpec(today, System.currentTimeMillis(), columns, DateFormat.is24HourFormat(context), zone, Prefs.textScale(context))
+        val spec = PeopleSpec(today, System.currentTimeMillis(), columns, banners, DateFormat.is24HourFormat(context), zone, Prefs.textScale(context))
         val setup = PendingIntent.getActivity(
             context, 900_000,
             Intent(context, PeopleActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
