@@ -6,37 +6,45 @@ import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 
-class MonthWidgetProvider : AppWidgetProvider() {
-
-    companion object {
-        const val ACTION_NAV = "com.foster.kitchencalendar.NAV"
-        const val ACTION_REFRESH = "com.foster.kitchencalendar.REFRESH"
-        const val ACTION_MIDNIGHT = "com.foster.kitchencalendar.MIDNIGHT"
-        const val ACTION_RESET_ALL = "com.foster.kitchencalendar.RESET_ALL"
-        const val EXTRA_DELTA = "delta"
-    }
+/** Shared lifecycle for every widget kind. */
+abstract class BaseWidgetProvider(private val kind: WidgetKind) : AppWidgetProvider() {
 
     override fun onUpdate(context: Context, mgr: AppWidgetManager, ids: IntArray) {
         CalendarChangeJob.schedule(context)
         val pending = goAsync()
-        WidgetUpdater.request(context, ids) { pending.finish() }
+        WidgetUpdater.request(context, kind, ids) { pending.finish() }
     }
 
-    // Fires on resize and when the tablet rotates.
+    // Fires on resize, fold/unfold, and when the tablet rotates.
     override fun onAppWidgetOptionsChanged(context: Context, mgr: AppWidgetManager, id: Int, newOptions: Bundle) {
         val pending = goAsync()
-        WidgetUpdater.request(context, intArrayOf(id)) { pending.finish() }
+        WidgetUpdater.request(context, kind, intArrayOf(id)) { pending.finish() }
     }
 
     override fun onEnabled(context: Context) = Scheduler.ensureScheduled(context)
 
-    override fun onDisabled(context: Context) = Scheduler.cancelAll(context)
+    override fun onDisabled(context: Context) {
+        // Only stop the background work once no widget of any kind is left.
+        if (!WidgetKind.anyPlaced(context)) Scheduler.cancelAll(context) else Scheduler.ensureScheduled(context)
+    }
 
     override fun onDeleted(context: Context, ids: IntArray) {
         ids.forEach {
             Prefs.clearWidget(context, it)
             ImageStore.deleteAll(context, it)
         }
+    }
+}
+
+class MonthWidgetProvider : BaseWidgetProvider(WidgetKind.MONTH) {
+
+    companion object {
+        const val ACTION_NAV = "com.foster.kitchencalendar.NAV"
+        const val ACTION_REFRESH = "com.foster.kitchencalendar.REFRESH"
+        const val ACTION_MIDNIGHT = "com.foster.kitchencalendar.MIDNIGHT"
+        const val ACTION_RESET_ALL = "com.foster.kitchencalendar.RESET_ALL"
+        const val ACTION_TICK = "com.foster.kitchencalendar.TICK"
+        const val EXTRA_DELTA = "delta"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -51,12 +59,17 @@ class MonthWidgetProvider : AppWidgetProvider() {
                 // Wander off to another month and it drifts back to today after a few minutes.
                 Scheduler.scheduleAutoReset(context, newOffset != 0)
                 val pending = goAsync()
-                WidgetUpdater.request(context, intArrayOf(id)) { pending.finish() }
+                WidgetUpdater.request(context, WidgetKind.MONTH, intArrayOf(id)) { pending.finish() }
             }
             ACTION_RESET_ALL -> {
-                WidgetUpdater.allIds(context).forEach { Prefs.setMonthOffset(context, it, 0) }
+                WidgetKind.MONTH.ids(context).forEach { Prefs.setMonthOffset(context, it, 0) }
                 val pending = goAsync()
-                WidgetUpdater.request(context) { pending.finish() }
+                WidgetUpdater.request(context, WidgetKind.MONTH) { pending.finish() }
+            }
+            ACTION_TICK -> {
+                // Moves the day view's "now" line and "Up next".
+                val pending = goAsync()
+                WidgetUpdater.request(context, WidgetKind.DAY) { pending.finish() }
             }
             ACTION_MIDNIGHT, ACTION_REFRESH -> {
                 val pending = goAsync()
@@ -65,3 +78,7 @@ class MonthWidgetProvider : AppWidgetProvider() {
         }
     }
 }
+
+class WeekWidgetProvider : BaseWidgetProvider(WidgetKind.WEEK)
+
+class DayWidgetProvider : BaseWidgetProvider(WidgetKind.DAY)

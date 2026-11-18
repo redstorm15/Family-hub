@@ -20,43 +20,54 @@ import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.roundToInt
 
-/** Renders and pushes the month widget. All heavy work runs on one background thread. */
+/** Renders and pushes every widget kind. All heavy work runs on one background thread. */
 object WidgetUpdater {
     private const val TAG = "KitchenCalendar"
     private const val MAX_SIDE_PX = 2560f
     private const val DAY_MS = 24L * 60 * 60 * 1000
     private val executor = Executors.newSingleThreadExecutor()
 
-    fun allIds(context: Context): IntArray =
-        AppWidgetManager.getInstance(context)
-            .getAppWidgetIds(ComponentName(context, MonthWidgetProvider::class.java))
-
-    /** Queue a redraw; [onDone] always runs (use it to finish goAsync / jobs). */
-    fun request(context: Context, ids: IntArray? = null, onDone: (() -> Unit)? = null) {
+    /**
+     * Queue a redraw. [kind] null = every widget kind; [ids] null = every placed widget of
+     * that kind. [onDone] always runs (use it to finish goAsync / jobs).
+     */
+    fun request(context: Context, kind: WidgetKind? = null, ids: IntArray? = null, onDone: (() -> Unit)? = null) {
         val app = context.applicationContext
         executor.execute {
             try {
-                updateNow(app, ids ?: allIds(app))
-            } catch (t: Throwable) {
-                Log.e(TAG, "Widget update failed", t)
+                val kinds = if (kind == null) WidgetKind.entries.toList() else listOf(kind)
+                for (k in kinds) {
+                    try {
+                        update(app, k, if (kind != null && ids != null) ids else k.ids(app))
+                    } catch (t: Throwable) {
+                        Log.e(TAG, "Widget update failed for $k", t)
+                    }
+                }
             } finally {
                 onDone?.invoke()
             }
         }
     }
 
-    private fun updateNow(context: Context, ids: IntArray) {
+    private fun update(context: Context, kind: WidgetKind, ids: IntArray) {
+        if (kind == WidgetKind.DAY) Scheduler.scheduleTick(context, ids.isNotEmpty() || WidgetKind.DAY.ids(context).isNotEmpty())
         if (ids.isEmpty()) return
         // Re-arm tomorrow's redraw. (The calendar-change job re-arms itself; scheduling it
         // from here could cancel it mid-run.)
         Scheduler.scheduleMidnight(context)
         val mgr = AppWidgetManager.getInstance(context)
-
         if (!CalendarRepository.hasPermission(context)) {
             ids.forEach { mgr.updateAppWidget(it, messageViews(context, context.getString(R.string.widget_needs_permission))) }
             return
         }
+        when (kind) {
+            WidgetKind.MONTH -> updateMonth(context, mgr, ids)
+            WidgetKind.WEEK -> updateWeek(context, mgr, ids)
+            WidgetKind.DAY -> updateDay(context, mgr, ids)
+        }
+    }
 
+    private fun updateMonth(context: Context, mgr: AppWidgetManager, ids: IntArray) {
         val zone = ZoneId.systemDefault()
         val today = LocalDate.now(zone)
         val mondays = Prefs.weekStartsMonday(context)
@@ -107,6 +118,107 @@ object WidgetUpdater {
             mgr.updateAppWidget(id, remote)
             ImageStore.cleanup(context, id, generation)
         }
+    }
+
+    private fun updateWeek(context: Context, mgr: AppWidgetManager, ids: IntArray) {
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now(zone)
+        val end = today.plusDays((WeekLayout.DAYS - 1).toLong())
+        val startMs = today.atStartOfDay(zone).toInstant().toEpochMilli() - DAY_MS
+        val endMs = end.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli() + DAY_MS
+        val events = CalendarRepository.loadEvents(context, startMs, endMs, Prefs.selectedCalendars(context))
+        val spec = WeekSpec(
+            start = today,
+            today = today,
+            eventsByDay = CalendarRepository.eventsByDay(events, today, end, zone),
+            showTimes = Prefs.showTimes(context),
+            use24h = DateFormat.is24HourFormat(context),
+            zone = zone,
+            textScale = Prefs.textScale(context),
+        )
+        val mode = Prefs.weekLayout(context)
+        for (id in ids) {
+            pushSizes(context, mgr, id) { wPx, hPx, viewW, viewH, save ->
+                val columns = WeekLayout.useColumns(mode, viewW, viewH)
+                val uri = save(WeekRenderer.render(wPx, hPx, spec, columns))
+                val padPx = MonthLayout.pad(viewW.roundToInt(), viewH.roundToInt()).roundToInt()
+                weekViews(context, id, uri, padPx, columns, today, zone)
+            }
+        }
+    }
+
+    private fun updateDay(context: Context, mgr: AppWidgetManager, ids: IntArray) {
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now(zone)   // flips to the new day at midnight
+        val startMs = today.atStartOfDay(zone).toInstant().toEpochMilli()
+        val endMs = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val events = CalendarRepository.loadEvents(context, startMs - DAY_MS, endMs + DAY_MS, Prefs.selectedCalendars(context))
+        val spec = DaySpec(
+            date = today,
+            nowMillis = System.currentTimeMillis(),
+            isToday = true,
+            events = CalendarRepository.eventsByDay(events, today, today, zone)[today].orEmpty(),
+            weather = WeatherRepository.get(context),
+            use24h = DateFormat.is24HourFormat(context),
+            zone = zone,
+            textScale = Prefs.textScale(context),
+        )
+        for (id in ids) {
+            pushSizes(context, mgr, id) { wPx, hPx, _, _, save ->
+                val uri = save(DayRenderer.render(wPx, hPx, spec))
+                RemoteViews(context.packageName, R.layout.widget_day).apply {
+                    setImageViewUri(R.id.calendar_image, uri)
+                    setOnClickPendingIntent(R.id.widget_root, openCalendarIntent(context, id, -1, today, zone))
+                }
+            }
+        }
+    }
+
+    /**
+     * Renders one image per launcher size (portrait/landscape) and pushes them together.
+     * [build] gets bitmap px, view px, and a save function that stores a bitmap and
+     * returns its URI.
+     */
+    private fun pushSizes(
+        context: Context, mgr: AppWidgetManager, id: Int,
+        build: (wPx: Int, hPx: Int, viewW: Float, viewH: Float, save: (android.graphics.Bitmap) -> Uri) -> RemoteViews,
+    ) {
+        val density = context.resources.displayMetrics.density
+        val generation = System.currentTimeMillis()
+        val views = LinkedHashMap<SizeF, RemoteViews>()
+        widgetSizes(mgr.getAppWidgetOptions(id)).forEachIndexed { index, size ->
+            val viewW = max(1f, size.width * density)
+            val viewH = max(1f, size.height * density)
+            val scale = min(1f, MAX_SIDE_PX / max(viewW, viewH))
+            val save: (android.graphics.Bitmap) -> Uri = { bmp ->
+                val uri = ImageStore.save(context, id, index, generation, bmp)
+                bmp.recycle()
+                uri
+            }
+            views[size] = build((viewW * scale).roundToInt(), (viewH * scale).roundToInt(), viewW, viewH, save)
+        }
+        mgr.updateAppWidget(id, if (views.size == 1) views.values.first() else RemoteViews(views))
+        ImageStore.cleanup(context, id, generation)
+    }
+
+    private fun weekViews(
+        context: Context, widgetId: Int, image: Uri, padPx: Int, columns: Boolean, start: LocalDate, zone: ZoneId,
+    ): RemoteViews {
+        val pkg = context.packageName
+        val rv = RemoteViews(pkg, if (columns) R.layout.widget_week_cols else R.layout.widget_week_rows)
+        rv.setImageViewUri(R.id.calendar_image, image)
+        rv.setViewPadding(R.id.overlay, padPx, 0, padPx, padPx)
+        rv.setOnClickPendingIntent(R.id.header_tap, openCalendarIntent(context, widgetId, -1, start, zone))
+        rv.removeAllViews(R.id.days)
+        for (i in 0 until WeekLayout.DAYS) {
+            val item = RemoteViews(pkg, if (columns) R.layout.widget_cell else R.layout.widget_row)
+            item.setOnClickPendingIntent(
+                if (columns) R.id.cell else R.id.row,
+                openCalendarIntent(context, widgetId, i, start.plusDays(i.toLong()), zone),
+            )
+            rv.addView(R.id.days, item)
+        }
+        return rv
     }
 
     /** Portrait and landscape sizes (dp) the launcher may show this widget at. */

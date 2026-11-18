@@ -6,9 +6,7 @@ import android.graphics.Color
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
-import android.graphics.Typeface
 import java.time.DayOfWeek
-import java.time.Instant
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.ZoneId
@@ -16,10 +14,8 @@ import java.time.format.TextStyle
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 import kotlin.math.floor
-import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.random.Random
 
 /**
  * Proportions shared by the renderer and the tap-target overlays.
@@ -67,9 +63,9 @@ data class MonthSpec(
 
 object MonthRenderer {
 
-    private val boldFace: Typeface = Typeface.create(Typeface.SANS_SERIF, 700, false)
-    private val mediumFace: Typeface = Typeface.create(Typeface.SANS_SERIF, 500, false)
-    private val regularFace: Typeface = Typeface.create(Typeface.SANS_SERIF, 400, false)
+    private val boldFace get() = Draw.bold
+    private val mediumFace get() = Draw.medium
+    private val regularFace get() = Draw.regular
 
     fun render(w: Int, h: Int, spec: MonthSpec): Bitmap {
         val theme = Themes.forMonth(spec.month.monthValue)
@@ -106,35 +102,17 @@ object MonthRenderer {
         canvas: Canvas, w: Float, headerH: Float, pad: Float, innerW: Float, month: YearMonth, theme: MonthTheme,
         compact: Boolean,
     ) {
-        val rnd = Random(month.year * 100 + month.monthValue)   // same art every redraw of a given month
-        val base = min(headerH * 0.16f, w * 0.05f)
-        val count = if (w > headerH * 6) 16 else 11
-        // Keep clear of the title block and the two nav arrows.
         val titleBox = if (compact) RectF(w * 0.2f, 0f, w * 0.8f, headerH)
                        else RectF(w * 0.3f, headerH * 0.08f, w * 0.7f, headerH * 0.95f)
         val navR = headerH * 0.2f
-        val navL = pad + innerW / 10f to headerH / 2
-        val navRt = w - pad - innerW / 10f to headerH / 2
-        val placed = mutableListOf<Triple<Float, Float, Float>>()
-        var attempts = 0
-        while (placed.size < count && attempts < 400) {
-            attempts++
-            val s = base * (0.6f + rnd.nextFloat() * 0.8f)
-            val x = s + rnd.nextFloat() * (w - 2 * s)
-            val y = s * 0.8f + rnd.nextFloat() * (headerH - 1.6f * s)
-            if (RectF(x - s, y - s, x + s, y + s).intersects(titleBox.left, titleBox.top, titleBox.right, titleBox.bottom)) continue
-            if (hypot(x - navL.first, y - navL.second) < navR + s || hypot(x - navRt.first, y - navRt.second) < navR + s) continue
-            if (placed.any { (px, py, ps) -> hypot(x - px, y - py) < (s + ps) * 1.05f }) continue
-            placed += Triple(x, y, s)
-        }
-        placed.forEachIndexed { i, (x, y, s) ->
-            val motif = theme.motifs[i % theme.motifs.size]
-            val fill = theme.decoColors[(i * 7 + rnd.nextInt(3)) % theme.decoColors.size]
-            val rot = if (motif == Motif.TREE || motif == Motif.GHOST || motif == Motif.PUMPKIN) {
-                rnd.nextFloat() * 16f - 8f
-            } else rnd.nextFloat() * 50f - 25f
-            motif.draw(canvas, x, y, s, rot, fill, theme.decoAccent, theme.headerBg)
-        }
+        Draw.decorations(
+            canvas, w, headerH, month.year * 100 + month.monthValue, theme,
+            keepClear = listOf(titleBox),
+            avoidCircles = listOf(
+                Triple(pad + innerW / 10f, headerH / 2, navR),
+                Triple(w - pad - innerW / 10f, headerH / 2, navR),
+            ),
+        )
     }
 
     private fun drawHeaderText(canvas: Canvas, w: Float, headerH: Float, spec: MonthSpec, theme: MonthTheme) {
@@ -296,7 +274,7 @@ object MonthRenderer {
             val left = rect.left + g * 1.5f
             val right = rect.right - g * 1.5f
             for (e in events.take(showCount)) {
-                drawChip(canvas, e, RectF(left, y, right, y + chipH), spec, theme, chipPaint, textPaint, alpha)
+                Draw.chip(canvas, e, RectF(left, y, right, y + chipH), theme, chipPaint, textPaint, alpha, spec.showTimes, spec.use24h, spec.zone)
                 y += chipH + chipGap
             }
             val hidden = events.size - showCount
@@ -307,50 +285,4 @@ object MonthRenderer {
             }
         }
     }
-
-    private fun drawChip(
-        canvas: Canvas, e: CalEvent, box: RectF, spec: MonthSpec, theme: MonthTheme,
-        chipPaint: Paint, textPaint: Paint, alpha: Int,
-    ) {
-        val color = if (e.color == 0) theme.todayFill else (e.color or 0xFF000000.toInt())
-        val r = box.height() * 0.22f
-        val baseline = box.centerY() - (textPaint.ascent() + textPaint.descent()) / 2
-        if (e.allDay) {
-            // All-day / multi-day: solid colored bar, like Google Calendar.
-            chipPaint.color = color; chipPaint.alpha = alpha
-            canvas.drawRoundRect(box, r, r, chipPaint)
-            textPaint.color = if (luminance(color) > 0.6) Color.parseColor("#2C2C2A") else Color.WHITE
-            textPaint.alpha = alpha
-            val tx = box.left + box.height() * 0.3f
-            canvas.drawText(ellipsize(e.title, textPaint, box.right - tx - box.height() * 0.2f), tx, baseline, textPaint)
-        } else {
-            // Timed: colored dot + "3p Title".
-            chipPaint.color = color; chipPaint.alpha = alpha
-            val dotR = box.height() * 0.2f
-            canvas.drawCircle(box.left + dotR + box.height() * 0.1f, box.centerY(), dotR, chipPaint)
-            textPaint.color = theme.dayText; textPaint.alpha = alpha
-            val tx = box.left + dotR * 2 + box.height() * 0.3f
-            val label = if (spec.showTimes) "${timeLabel(e.beginMillis, spec)} ${e.title}" else e.title
-            canvas.drawText(ellipsize(label, textPaint, box.right - tx), tx, baseline, textPaint)
-        }
-    }
-
-    private fun timeLabel(millis: Long, spec: MonthSpec): String {
-        val t = Instant.ofEpochMilli(millis).atZone(spec.zone).toLocalTime()
-        if (spec.use24h) return "%d:%02d".format(t.hour, t.minute)
-        val h12 = if (t.hour % 12 == 0) 12 else t.hour % 12
-        val ampm = if (t.hour < 12) "a" else "p"
-        return if (t.minute == 0) "$h12$ampm" else "$h12:%02d$ampm".format(t.minute)
-    }
-
-    private fun ellipsize(text: String, p: Paint, maxW: Float): String {
-        if (maxW <= 0) return ""
-        if (p.measureText(text) <= maxW) return text
-        val ell = "…"
-        val n = p.breakText(text, true, maxW - p.measureText(ell), null)
-        return if (n <= 0) "" else text.substring(0, n).trimEnd() + ell
-    }
-
-    private fun luminance(c: Int): Double =
-        (0.299 * Color.red(c) + 0.587 * Color.green(c) + 0.114 * Color.blue(c)) / 255.0
 }

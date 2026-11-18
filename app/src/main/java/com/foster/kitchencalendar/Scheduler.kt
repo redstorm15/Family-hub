@@ -7,7 +7,7 @@ import android.content.Intent
 import java.time.LocalDate
 import java.time.ZoneId
 
-/** Midnight redraw (so "today" moves) and the drift-back-to-this-month timer. */
+/** Midnight redraw (so "today" moves), the day view tick, and the drift-back-to-this-month timer. */
 object Scheduler {
     private const val AUTO_RESET_MS = 3 * 60_000L
 
@@ -31,7 +31,19 @@ object Scheduler {
         }
     }
 
+    /** Every ~15 minutes while a day widget exists, so "now" and "Up next" stay current. */
+    fun scheduleTick(context: Context, enabled: Boolean) {
+        val pi = broadcast(context, MonthWidgetProvider.ACTION_TICK, 3)
+        if (enabled) {
+            val every = AlarmManager.INTERVAL_FIFTEEN_MINUTES
+            alarms(context).setInexactRepeating(AlarmManager.RTC, System.currentTimeMillis() + every, every, pi)
+        } else {
+            alarms(context).cancel(pi)
+        }
+    }
+
     fun cancelAll(context: Context) {
+        alarms(context).cancel(broadcast(context, MonthWidgetProvider.ACTION_TICK, 3))
         alarms(context).cancel(broadcast(context, MonthWidgetProvider.ACTION_MIDNIGHT, 1))
         alarms(context).cancel(broadcast(context, MonthWidgetProvider.ACTION_RESET_ALL, 2))
         CalendarChangeJob.cancel(context)

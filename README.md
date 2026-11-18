@@ -45,6 +45,9 @@ December, and so on). It reads events from the calendars synced on the tablet, s
 | `WidgetUpdater.kt` | Renders portrait and landscape sizes, builds the tap-target overlay, pushes to the launcher |
 | `MonthWidgetProvider.kt` | Widget lifecycle and nav taps |
 | `Scheduler.kt` / `CalendarChangeJob.kt` | Midnight redraw, auto-return to today, redraw on calendar changes |
+| `WeekRenderer.kt` / `DayRenderer.kt` | The week and day views |
+| `Weather.kt` | Home Assistant + Open-Meteo weather and weather icons |
+| `Draw.kt` | Shared drawing: event chips, header art, text helpers |
 | `SettingsActivity.kt` | Calendar access, calendar picker, week start, show times |
 
 ### Why one big image?
@@ -55,7 +58,24 @@ to pass to the launcher directly, it's saved as a PNG and shared via a private
 `content://` URI that only the launcher can read. A transparent grid of tap targets
 sits on top, sized by the same proportions (`MonthLayout` ↔ `widget_month.xml`).
 
-## Next: day and week views
+## Week and day widgets
 
-Planned as additional widgets (`DayWidgetProvider`, `WeekWidgetProvider`) that reuse
-`CalendarRepository`, `Themes`, `Motif`, `ImageStore`, and the scheduling, each with its own renderer.
+**This week** (Kitchen Calendar → "This week"): a rolling 7 days starting today.
+In portrait it's a schedule with one row per day; in landscape, seven columns. Tap a day to
+open it in Google Calendar. Settings → Week widget layout can lock it to one style.
+
+**Today** (Kitchen Calendar → "Today"): the full date, weather, all-day events, what's
+happening now or up next (with a countdown), and a timeline that fits itself to the day
+(8a–9p, extended for earlier or later events) with a line for the current time.
+In landscape, the timeline sits on the left with a list on the right. It refreshes every
+~15 minutes and switches to the new day at midnight.
+
+### Weather
+
+1. **Home Assistant first:** Settings → Weather → enter your HA URL (for example
+   `http://homeassistant.local:8123` or `http://192.168.x.x:8123`), a long-lived access token
+   (HA profile → Security), and your weather entity (default `weather.forecast_home`).
+2. **Backup:** if HA isn't set up or can't be reached, it uses Open-Meteo (free, no key) for
+   the saved location (Greenwich, CT by default; change it with "Look up location").
+3. **Test weather** shows which source answered. Results are cached for 30 minutes, and a
+   cached reading up to 6 hours old is shown if both sources fail.

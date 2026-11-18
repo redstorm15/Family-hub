@@ -46,4 +46,58 @@ object Prefs {
         sp(context).edit().putInt("offset_$widgetId", v).apply()
 
     fun clearWidget(context: Context, widgetId: Int) = sp(context).edit().remove("offset_$widgetId").apply()
+
+    // ---------- Week view ----------
+
+    /** 0 = auto (schedule in portrait, columns in landscape), 1 = always schedule, 2 = always columns. */
+    fun weekLayout(context: Context) = sp(context).getInt("week_layout", 0).coerceIn(0, 2)
+    fun setWeekLayout(context: Context, v: Int) = sp(context).edit().putInt("week_layout", v.coerceIn(0, 2)).apply()
+
+    // ---------- Weather ----------
+
+    fun weatherEnabled(context: Context) = sp(context).getBoolean("weather_on", true)
+    fun setWeatherEnabled(context: Context, v: Boolean) = sp(context).edit().putBoolean("weather_on", v).apply()
+
+    fun haUrl(context: Context) = sp(context).getString("ha_url", "")!!
+    fun haToken(context: Context) = sp(context).getString("ha_token", "")!!
+    fun haEntity(context: Context) = sp(context).getString("ha_entity", "weather.forecast_home")!!
+    fun setHomeAssistant(context: Context, url: String, token: String, entity: String) =
+        sp(context).edit().putString("ha_url", url.trim()).putString("ha_token", token.trim())
+            .putString("ha_entity", entity.trim()).apply()
+
+    /** Fallback location for Open-Meteo. Defaults to Greenwich, CT. */
+    fun weatherLatLon(context: Context): Pair<Double, Double> {
+        val p = sp(context)
+        return p.getFloat("wx_lat", 41.0262f).toDouble() to p.getFloat("wx_lon", -73.6282f).toDouble()
+    }
+    fun weatherPlace(context: Context) = sp(context).getString("wx_place", "Greenwich, Connecticut, US")!!
+    fun setWeatherPlace(context: Context, lat: Double, lon: Double, name: String) =
+        sp(context).edit().putFloat("wx_lat", lat.toFloat()).putFloat("wx_lon", lon.toFloat())
+            .putString("wx_place", name).apply()
+
+    fun weatherFahrenheit(context: Context) = sp(context).getBoolean("wx_f", true)
+    fun setWeatherFahrenheit(context: Context, v: Boolean) = sp(context).edit().putBoolean("wx_f", v).apply()
+
+    fun saveWeatherCache(context: Context, w: WeatherNow) {
+        val j = org.json.JSONObject()
+            .put("temp", w.temp ?: org.json.JSONObject.NULL).put("sky", w.sky.name).put("label", w.label)
+            .put("high", w.high ?: org.json.JSONObject.NULL).put("low", w.low ?: org.json.JSONObject.NULL)
+            .put("precip", w.precipPct ?: org.json.JSONObject.NULL).put("unit", w.unit)
+            .put("source", w.source).put("at", w.fetchedAt)
+        sp(context).edit().putString("wx_cache", j.toString()).apply()
+    }
+
+    fun loadWeatherCache(context: Context): WeatherNow? = try {
+        sp(context).getString("wx_cache", null)?.let {
+            val j = org.json.JSONObject(it)
+            fun int(k: String) = if (j.isNull(k)) null else j.optInt(k)
+            WeatherNow(
+                temp = int("temp"), sky = Sky.valueOf(j.optString("sky", "UNKNOWN")), label = j.optString("label"),
+                high = int("high"), low = int("low"), precipPct = int("precip"), unit = j.optString("unit", "°F"),
+                source = j.optString("source"), fetchedAt = j.optLong("at"),
+            )
+        }
+    } catch (t: Throwable) { null }
+
+    fun clearWeatherCache(context: Context) = sp(context).edit().remove("wx_cache").apply()
 }
