@@ -51,13 +51,17 @@ object WidgetUpdater {
     }
 
     private fun update(context: Context, kind: WidgetKind, ids: IntArray) {
-        val ticking = listOf(WidgetKind.DAY, WidgetKind.WEATHER, WidgetKind.DATE, WidgetKind.MINI_WEATHER)
+        val ticking = listOf(WidgetKind.DAY, WidgetKind.WEATHER, WidgetKind.DATE, WidgetKind.MINI_WEATHER, WidgetKind.INDOOR)
         if (kind in ticking) Scheduler.scheduleTick(context, ticking.any { it.ids(context).isNotEmpty() })
         if (ids.isEmpty()) return
         // Re-arm tomorrow's redraw. (The calendar-change job re-arms itself; scheduling it
         // from here could cancel it mid-run.)
         Scheduler.scheduleMidnight(context)
         val mgr = AppWidgetManager.getInstance(context)
+        if (kind == WidgetKind.INDOOR) {
+            updateIndoor(context, mgr, ids)
+            return   // no calendar access needed
+        }
         if (kind == WidgetKind.STICKY || kind == WidgetKind.EASEL) {
             if (kind == WidgetKind.STICKY) updateSticky(context, mgr, ids) else updateEasel(context, mgr, ids)
             return   // no calendar access needed
@@ -79,6 +83,7 @@ object WidgetUpdater {
             WidgetKind.MINI_WEATHER -> updateMiniWeather(context, mgr, ids)
             WidgetKind.STICKY -> updateSticky(context, mgr, ids)
             WidgetKind.EASEL -> updateEasel(context, mgr, ids)
+            WidgetKind.INDOOR -> updateIndoor(context, mgr, ids)
         }
     }
 
@@ -198,6 +203,7 @@ object WidgetUpdater {
         }
         request(app, WidgetKind.WEATHER)
         request(app, WidgetKind.MINI_WEATHER)
+        request(app, WidgetKind.INDOOR)
         request(app, WidgetKind.DAY, onDone = onDone)
     }
 
@@ -321,6 +327,26 @@ object WidgetUpdater {
                     setViewLayoutMargin(R.id.add_button, RemoteViews.MARGIN_LEFT, plus.left, TypedValue.COMPLEX_UNIT_PX)
                     setViewLayoutMargin(R.id.add_button, RemoteViews.MARGIN_TOP, plus.top, TypedValue.COMPLEX_UNIT_PX)
                     setOnClickPendingIntent(R.id.add_button, stickyIntent(context, id, 98, -1))
+                }
+            }
+        }
+    }
+
+    private fun updateIndoor(context: Context, mgr: AppWidgetManager, ids: IntArray) {
+        val bundle = WeatherRepository.bundle(context)
+        val spec = IndoorSpec(
+            indoor = bundle?.station?.indoor,
+            outdoorTemp = bundle?.now?.temp,
+            fahrenheit = Prefs.weatherFahrenheit(context),
+            configured = Prefs.ambientApiKey(context).isNotEmpty() && Prefs.ambientAppKey(context).isNotEmpty(),
+        )
+        val density = context.resources.displayMetrics.density
+        for (id in ids) {
+            pushSizes(context, mgr, id) { wPx, hPx, viewW, viewH, save ->
+                val uri = save(IndoorRenderer.render(wPx, hPx, viewW / density, viewH / density, spec))
+                RemoteViews(context.packageName, R.layout.widget_day).apply {
+                    setImageViewUri(R.id.calendar_image, uri)
+                    setOnClickPendingIntent(R.id.widget_root, refreshIntent(context))   // tap to refresh
                 }
             }
         }

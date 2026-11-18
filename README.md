@@ -118,3 +118,14 @@ Add the **Doodle easel** widget. It shows the last thing drawn (or a few crayons
 - **One finger draws, two fingers scroll** the endless roll. With the S Pen, the pen draws and one finger scrolls, so a resting hand doesn't scribble. The pen's button-eraser end erases.
 - **⬇ More paper** rolls down to a fresh stretch; **🧻 New paper** clears the whole roll; **↩ Undo**; **✓ Done**.
 - Art isn't saved as files. The roll stays while the tablet is on and resets after a restart or app update.
+
+### Indoor air
+
+Add the **Indoor air** widget. It reads the same Ambient Weather account as the weather widgets:
+
+- Indoor temperature and humidity from the station console, and PM2.5 / PM10 / CO₂ from an AQIN (or PM2.5 from a PM25IN).
+- The background color is the air quality: green good, yellow moderate, orange/red unhealthy (US EPA PM2.5 breakpoints).
+- Bigger sizes add tiles for each reading and one tip ("Dry: fill and run the humidifiers", "Stuffy: open a window", which only suggests a window when the outdoor PM2.5 is clean).
+- Tap to refresh. It updates with the weather every 15 minutes.
+
+Each widget now shows its own preview picture in the widget picker.

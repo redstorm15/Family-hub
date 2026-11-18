@@ -51,7 +51,24 @@ data class StationNow(
     val lat: Double?,
     val lon: Double?,
     val observedAt: Long,
+    val indoor: IndoorNow? = null,
 )
+
+/**
+ * Indoor readings from the station console and an AQIN / PM25IN sensor, if present.
+ * Ambient's field names vary by sensor, so these are matched loosely (see [WeatherRepository]).
+ */
+data class IndoorNow(
+    val tempF: Double?,
+    val humidity: Int?,
+    val pm25: Double?,
+    val pm25Day: Double?,
+    val pm10: Double?,
+    val co2: Int?,
+    val outdoorPm25: Double?,
+) {
+    val hasAir get() = pm25 != null || co2 != null
+}
 
 data class HourForecast(val time: Long, val temp: Int, val apparent: Int, val sky: Sky, val precipPct: Int, val isDay: Boolean, val uv: Double?)
 data class DayForecast(val date: LocalDate, val sky: Sky, val high: Int, val low: Int, val precipPct: Int, val uvMax: Double?, val snow: Boolean)
@@ -195,6 +212,7 @@ object WeatherRepository {
                 lat = coords?.optDoubleOrNull("lat"),
                 lon = coords?.optDoubleOrNull("lon"),
                 observedAt = data.optLong("dateutc", System.currentTimeMillis()),
+                indoor = indoorFrom(data),
             )
         } catch (t: Throwable) {
             Log.w(TAG, "Ambient Weather fetch failed", t)
@@ -372,6 +390,24 @@ object WeatherRepository {
         } finally {
             conn.disconnect()
         }
+    }
+
+    /**
+     * Console: tempinf / humidityin. AQIN: pm25_in_aqin, pm25_in_24h_aqin, pm10_in_aqin, co2_in_aqin
+     * (and its own temp/humidity). PM25IN: pm25_in, pm25_in_24h. Matched by pattern so either works.
+     */
+    private fun indoorFrom(data: JSONObject): IndoorNow? {
+        val keys = data.keys().asSequence().toList()
+        fun first(pred: (String) -> Boolean): Double? =
+            keys.filter { pred(it.lowercase()) }.sorted().firstNotNullOfOrNull { data.optDoubleOrNull(it) }
+        val pm25 = first { it.startsWith("pm25_in") && "24h" !in it }
+        val pm25Day = first { it.startsWith("pm25_in") && "24h" in it }
+        val pm10 = first { it.startsWith("pm10_in") && "24h" !in it }
+        val co2 = first { it.startsWith("co2") && "24h" !in it }
+        val temp = data.optDoubleOrNull("tempinf") ?: first { it.startsWith("pm_in_temp") }
+        val hum = data.optDoubleOrNull("humidityin") ?: first { it.startsWith("pm_in_humidity") }
+        if (listOf(pm25, co2, temp, hum).all { it == null }) return null
+        return IndoorNow(temp, hum?.roundToInt(), pm25, pm25Day, pm10, co2?.roundToInt(), data.optDoubleOrNull("pm25"))
     }
 
     private fun JSONObject.optDoubleOrNull(key: String): Double? =

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_easel_description"
+    android:previewImage="@drawable/preview_easel"
     android:initialLayout="@layout/widget_message"
     android:minWidth="40dp"
     android:minHeight="40dp"

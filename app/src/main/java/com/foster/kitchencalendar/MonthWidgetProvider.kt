@@ -73,6 +73,7 @@ class MonthWidgetProvider : BaseWidgetProvider(WidgetKind.MONTH) {
                 WidgetUpdater.request(context, WidgetKind.DAY)
                 WidgetUpdater.request(context, WidgetKind.DATE)
                 WidgetUpdater.request(context, WidgetKind.MINI_WEATHER)
+                WidgetUpdater.request(context, WidgetKind.INDOOR)
                 WidgetUpdater.request(context, WidgetKind.WEATHER) { pending.finish() }
             }
             ACTION_REFRESH_WEATHER -> {
@@ -102,3 +103,6 @@ class StickyWidgetProvider : BaseWidgetProvider(WidgetKind.STICKY)
 
 /** The doodle easel: tap to draw. */
 class EaselWidgetProvider : BaseWidgetProvider(WidgetKind.EASEL)
+
+/** Indoor temperature, humidity and air quality from the Ambient station. */
+class IndoorWidgetProvider : BaseWidgetProvider(WidgetKind.INDOOR)
