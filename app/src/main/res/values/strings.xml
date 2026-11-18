@@ -13,6 +13,8 @@
     <string name="widget_mini_weather_label">Weather (small)</string>
     <string name="widget_mini_weather_description">Current weather at a glance. Resize from 1×1 up</string>
     <string name="widget_sticky_label">Sticky notes</string>
+    <string name="widget_people_label">Today by person</string>
+    <string name="widget_people_description">Today with a column and photo for each family member</string>
     <string name="widget_tank_label">Aquarium</string>
     <string name="widget_tank_description">Tank upkeep: what\'s due this weekend</string>
     <string name="widget_meals_label">Dinner plan</string>

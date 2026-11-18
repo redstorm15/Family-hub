@@ -165,3 +165,11 @@ Chores are grouped by weekend: anything due by Sunday shows as "this weekend".
 ### Dark mode
 
 Settings › **Dark mode**: *Follow the tablet* (default), *Always light* or *Always dark*. With the tablet's dark mode on a sunset-to-sunrise schedule, the month, week, today, date and dinner widgets switch to night colors within 15 minutes (tap any widget to redraw right away). Each month keeps its accent colors and art on a charcoal base. The dinner planner and aquarium screens follow the same setting. Weather, indoor air, aquarium and Watch widgets were already dark; sticky notes and the easel stay paper-colored on purpose.
+
+### Today by person
+
+Add the **Today by person** widget (give it a big space, 4×4 or more): today's date, a row of faces (one per family member), each person's all-day items under their face, and a shared timeline with one lane per person and a red "now" line. A 🏠 Family column shows calendars nobody owns (like a shared family calendar) when they have something today.
+
+- Works right away: until you set people up, every selected calendar is its own person, named after the calendar.
+- **Tap the faces** (or Settings › Set up people) to give everyone a name, a color, a photo (take one or pick from the gallery) and the calendars that are theirs; ▲▼ to reorder.
+- Tap anywhere else to open today in Google Calendar. The little number on each face is how many things they have today.

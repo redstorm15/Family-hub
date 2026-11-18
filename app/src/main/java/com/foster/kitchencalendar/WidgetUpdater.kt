@@ -55,7 +55,7 @@ object WidgetUpdater {
         Prefs.setLastDrawnDark(context, Themes.dark)
         // The tick also catches dark-mode flips, so widgets that change color keep it running too.
         val ticking = listOf(WidgetKind.DAY, WidgetKind.WEATHER, WidgetKind.DATE, WidgetKind.MINI_WEATHER, WidgetKind.INDOOR,
-            WidgetKind.MONTH, WidgetKind.WEEK, WidgetKind.MEALS)
+            WidgetKind.MONTH, WidgetKind.WEEK, WidgetKind.MEALS, WidgetKind.PEOPLE)
         if (kind in ticking) Scheduler.scheduleTick(context, ticking.any { it.ids(context).isNotEmpty() })
         if (ids.isEmpty()) return
         // Re-arm tomorrow's redraw. (The calendar-change job re-arms itself; scheduling it
@@ -96,6 +96,7 @@ object WidgetUpdater {
             WidgetKind.WATCH -> updateWatch(context, mgr, ids)
             WidgetKind.MEALS -> updateMeals(context, mgr, ids)
             WidgetKind.TANK -> updateTank(context, mgr, ids)
+            WidgetKind.PEOPLE -> updatePeople(context, mgr, ids)
         }
     }
 
@@ -440,6 +441,46 @@ object WidgetUpdater {
                 }
             }
         }
+    }
+
+    private fun updatePeople(context: Context, mgr: AppWidgetManager, ids: IntArray) {
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now(zone)
+        val people = PeopleStore.people(context)
+        val selected = Prefs.selectedCalendars(context)
+        val owned = people.flatMap { it.calendarIds }.toSet()
+        val wanted: Set<Long>? = if (selected == null) null else selected + owned
+        val startMs = today.atStartOfDay(zone).toInstant().toEpochMilli()
+        val endMs = today.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val events = CalendarRepository.loadEvents(context, startMs - DAY_MS, endMs + DAY_MS, wanted)
+        val todays = CalendarRepository.eventsByDay(events, today, today, zone)[today].orEmpty()
+        val columns = people.map { p ->
+            PersonColumn(p, PeopleStore.photo(context, p.id), family = false, events = todays.filter { it.calendarId in p.calendarIds })
+        }.toMutableList()
+        // Shared calendars nobody owns (e.g. "Family") get their own column when they have something today.
+        val shared = todays.filter { it.calendarId !in owned }
+        if (PeopleStore.showFamily(context) && shared.isNotEmpty()) {
+            columns.add(0, PersonColumn(Person("family", "Family", Themes.forMonth(today.monthValue).todayFill, emptySet()), null, true, shared))
+        }
+        val spec = PeopleSpec(today, System.currentTimeMillis(), columns, DateFormat.is24HourFormat(context), zone, Prefs.textScale(context))
+        val setup = PendingIntent.getActivity(
+            context, 900_000,
+            Intent(context, PeopleActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        for (id in ids) {
+            pushSizes(context, mgr, id) { wPx, hPx, _, viewH, save ->
+                val uri = save(PeopleRenderer.render(wPx, hPx, spec))
+                RemoteViews(context.packageName, R.layout.widget_people).apply {
+                    setImageViewUri(R.id.calendar_image, uri)
+                    setOnClickPendingIntent(R.id.widget_root, openCalendarIntent(context, id, -1, today, zone))
+                    // The faces at the top open the People setup.
+                    setViewLayoutHeight(R.id.header_tap, viewH * 0.24f, android.util.TypedValue.COMPLEX_UNIT_PX)
+                    setOnClickPendingIntent(R.id.header_tap, setup)
+                }
+            }
+        }
+        columns.forEach { it.photo?.recycle() }
     }
 
     private fun updateEasel(context: Context, mgr: AppWidgetManager, ids: IntArray) {

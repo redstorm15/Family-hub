@@ -77,6 +77,7 @@ class MonthWidgetProvider : BaseWidgetProvider(WidgetKind.MONTH) {
                     WidgetUpdater.request(context)
                 }
                 WidgetUpdater.request(context, WidgetKind.DAY)
+                WidgetUpdater.request(context, WidgetKind.PEOPLE)
                 WidgetUpdater.request(context, WidgetKind.DATE)
                 WidgetUpdater.request(context, WidgetKind.MINI_WEATHER)
                 WidgetUpdater.request(context, WidgetKind.INDOOR)
@@ -122,3 +123,6 @@ class MealsWidgetProvider : BaseWidgetProvider(WidgetKind.MEALS)
 
 /** Aquarium upkeep: what's due this weekend. */
 class TankWidgetProvider : BaseWidgetProvider(WidgetKind.TANK)
+
+/** Today with one column per family member. */
+class PeopleWidgetProvider : BaseWidgetProvider(WidgetKind.PEOPLE)

@@ -146,6 +146,13 @@ class SettingsActivity : Activity() {
                 }
             })
 
+            heading("Today by person")
+            para("Give each family member a column, a photo and their calendars.")
+            root.addView(Button(this).apply {
+                text = "Set up people"
+                setOnClickListener { startActivity(android.content.Intent(this@SettingsActivity, PeopleActivity::class.java)) }
+            })
+
             heading("Dark mode")
             para("Widgets go dark at night. \"Follow the tablet\" works with Settings › Display › Dark mode on a sunset-to-sunrise schedule (widgets catch up within 15 minutes).")
             root.addView(RadioGroup(this).apply {

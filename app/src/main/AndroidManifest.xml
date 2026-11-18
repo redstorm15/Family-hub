@@ -125,6 +125,26 @@
         </receiver>
 
         <receiver
+            android:name=".PeopleWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_people_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/people_widget_info" />
+        </receiver>
+
+        <activity
+            android:name=".PeopleActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:label="@string/widget_people_label"
+            android:windowSoftInputMode="adjustResize" />
+
+        <receiver
             android:name=".TankWidgetProvider"
             android:exported="true"
             android:label="@string/widget_tank_label">
