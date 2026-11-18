@@ -20,6 +20,7 @@ data class DaySpec(
     val isToday: Boolean,
     val events: List<CalEvent>,     // everything touching [date], all-day first
     val weather: WeatherNow?,
+    val wear: WearAdvice?,
     val use24h: Boolean,
     val zone: ZoneId,
     val textScale: Float,
@@ -58,12 +59,14 @@ object DayRenderer {
             var y = area.top
             val right = RectF(split + pad * 0.5f, area.top, area.right, area.bottom)
             y = drawWeather(canvas, right.left, y, right.right, spec, theme, u)
+            y = drawWear(canvas, right.left, y, right.right, spec, theme, u)
             y = drawUpNext(canvas, right.left, y, right.right, timed, spec, theme, u)
             y = drawAllDay(canvas, right.left, y, right.right, allDay, theme, u, maxLines = 3)
             drawEventList(canvas, RectF(right.left, y, right.right, right.bottom), timed, spec, theme, u)
         } else {
             var y = area.top
             y = drawWeather(canvas, area.left, y, area.right, spec, theme, u)
+            y = drawWear(canvas, area.left, y, area.right, spec, theme, u)
             y = drawAllDay(canvas, area.left, y, area.right, allDay, theme, u, maxLines = 3)
             y = drawUpNext(canvas, area.left, y, area.right, timed, spec, theme, u)
             drawTimeline(canvas, RectF(area.left, y, area.right, area.bottom), timed, spec, theme, u)
@@ -110,7 +113,7 @@ object DayRenderer {
         val h = u * 3.4f
         val rect = RectF(left, top, right, top + h)
         card(canvas, rect, theme)
-        WeatherIcon.draw(canvas, wx.sky, rect.left + h * 0.6f, rect.centerY(), h * 0.36f, theme.mutedText, theme.todayFill)
+        WeatherIcon.draw(canvas, wx.sky, rect.left + h * 0.6f, rect.centerY(), h * 0.36f, theme.mutedText, theme.todayFill, night = !wx.isDay)
 
         val tempP = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = theme.dayText; typeface = Draw.bold; textSize = u * 2.0f }
         val temp = wx.temp?.let { "$it°" } ?: "—"
@@ -126,8 +129,17 @@ object DayRenderer {
             wx.precipPct?.let { add("$it% rain") }
         }.joinToString("  ·  ")
         val maxW = rect.right - lx - u * 0.6f
-        canvas.drawText(Draw.ellipsize(wx.label, line1, maxW), lx, rect.centerY() - u * 0.15f, line1)
+        val headline = wx.label + (wx.feelsLike?.let { " · feels like $it°" } ?: "")
+        canvas.drawText(Draw.ellipsize(headline, line1, maxW), lx, rect.centerY() - u * 0.15f, line1)
         canvas.drawText(Draw.ellipsize(details, line2, maxW), lx, rect.centerY() + u * 1.0f, line2)
+        return rect.bottom + u * 0.6f
+    }
+
+    private fun drawWear(canvas: Canvas, left: Float, top: Float, right: Float, spec: DaySpec, theme: MonthTheme, u: Float): Float {
+        val advice = spec.wear ?: return top
+        val rect = RectF(left, top, right, top + u * 4.4f)
+        card(canvas, rect, theme)
+        WearIcon.panel(canvas, rect, advice, theme.dayText, theme.mutedText)
         return rect.bottom + u * 0.6f
     }
 

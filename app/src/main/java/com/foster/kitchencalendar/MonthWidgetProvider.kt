@@ -44,6 +44,7 @@ class MonthWidgetProvider : BaseWidgetProvider(WidgetKind.MONTH) {
         const val ACTION_MIDNIGHT = "com.foster.kitchencalendar.MIDNIGHT"
         const val ACTION_RESET_ALL = "com.foster.kitchencalendar.RESET_ALL"
         const val ACTION_TICK = "com.foster.kitchencalendar.TICK"
+        const val ACTION_REFRESH_WEATHER = "com.foster.kitchencalendar.REFRESH_WEATHER"
         const val EXTRA_DELTA = "delta"
     }
 
@@ -67,9 +68,14 @@ class MonthWidgetProvider : BaseWidgetProvider(WidgetKind.MONTH) {
                 WidgetUpdater.request(context, WidgetKind.MONTH) { pending.finish() }
             }
             ACTION_TICK -> {
-                // Moves the day view's "now" line and "Up next".
+                // Moves the day view's "now" line and "Up next", and refreshes weather.
                 val pending = goAsync()
-                WidgetUpdater.request(context, WidgetKind.DAY) { pending.finish() }
+                WidgetUpdater.request(context, WidgetKind.DAY)
+                WidgetUpdater.request(context, WidgetKind.WEATHER) { pending.finish() }
+            }
+            ACTION_REFRESH_WEATHER -> {
+                val pending = goAsync()
+                WidgetUpdater.refreshWeatherNow(context) { pending.finish() }
             }
             ACTION_MIDNIGHT, ACTION_REFRESH -> {
                 val pending = goAsync()
@@ -82,3 +88,5 @@ class MonthWidgetProvider : BaseWidgetProvider(WidgetKind.MONTH) {
 class WeekWidgetProvider : BaseWidgetProvider(WidgetKind.WEEK)
 
 class DayWidgetProvider : BaseWidgetProvider(WidgetKind.DAY)
+
+class WeatherWidgetProvider : BaseWidgetProvider(WidgetKind.WEATHER)

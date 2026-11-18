@@ -100,4 +100,22 @@ object Prefs {
     } catch (t: Throwable) { null }
 
     fun clearWeatherCache(context: Context) = sp(context).edit().remove("wx_cache").apply()
+
+    // ---------- Ambient Weather station ----------
+
+    fun ambientApiKey(context: Context) = sp(context).getString("aw_api", "")!!.trim()
+    fun ambientAppKey(context: Context) = sp(context).getString("aw_app", "")!!.trim()
+    fun ambientMac(context: Context) = sp(context).getString("aw_mac", "")!!
+    fun setAmbient(context: Context, apiKey: String, appKey: String, mac: String) =
+        sp(context).edit().putString("aw_api", apiKey.trim()).putString("aw_app", appKey.trim())
+            .putString("aw_mac", mac.trim()).apply()
+
+    // ---------- What to wear ----------
+
+    /** -1 = kids run cold, 0 = normal, 1 = kids run warm. */
+    fun kidsRun(context: Context) = sp(context).getInt("kids_run", 0).coerceIn(-1, 1)
+    fun setKidsRun(context: Context, v: Int) = sp(context).edit().putInt("kids_run", v.coerceIn(-1, 1)).apply()
+
+    fun wearOnToday(context: Context) = sp(context).getBoolean("wear_today", true)
+    fun setWearOnToday(context: Context, v: Boolean) = sp(context).edit().putBoolean("wear_today", v).apply()
 }

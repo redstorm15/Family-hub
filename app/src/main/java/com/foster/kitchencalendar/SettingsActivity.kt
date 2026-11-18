@@ -165,7 +165,7 @@ class SettingsActivity : Activity() {
     /** Weather for the day widget: Home Assistant first, Open-Meteo for the saved place as backup. */
     private fun buildWeatherSection(root: LinearLayout, heading: (String) -> Unit, para: (String) -> Unit) {
         val ctx = this
-        heading("Weather (Today widget)")
+        heading("Weather")
         root.addView(Switch(this).apply {
             text = "Show weather"; textSize = 16f
             isChecked = Prefs.weatherEnabled(ctx)
@@ -181,12 +181,50 @@ class SettingsActivity : Activity() {
             }
         })
 
-        para("Home Assistant is used first. Use a long-lived access token (your HA profile → Security). Leave blank to skip.")
         fun field(hint: String, value: String, secret: Boolean = false) = EditText(this).apply {
             this.hint = hint; setText(value); textSize = 16f; setSingleLine()
             inputType = if (secret) InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
         }.also { root.addView(it) }
+
+        heading("Ambient Weather station")
+        para("Your station supplies the current conditions. Create both keys at ambientweather.net → Account → API Keys. Forecasts still come from Open-Meteo at your station's location.")
+        val awApi = field("API key", Prefs.ambientApiKey(ctx), secret = true)
+        val awApp = field("Application key", Prefs.ambientAppKey(ctx), secret = true)
+        val awMac = field("Station MAC address (optional, if you have more than one)", Prefs.ambientMac(ctx))
+        root.addView(Button(this).apply {
+            text = "Save station settings"
+            setOnClickListener {
+                Prefs.setAmbient(ctx, awApi.text.toString(), awApp.text.toString(), awMac.text.toString())
+                WeatherRepository.invalidate(ctx); Scheduler.refreshAll(ctx)
+                Toast.makeText(ctx, "Saved", Toast.LENGTH_SHORT).show()
+            }
+        })
+
+        heading("What to wear")
+        root.addView(Switch(this).apply {
+            text = "Show on the Today widget"; textSize = 16f
+            isChecked = Prefs.wearOnToday(ctx)
+            setPadding(0, dp(8), 0, dp(8))
+            setOnCheckedChangeListener { _, v -> Prefs.setWearOnToday(ctx, v); Scheduler.refreshAll(ctx) }
+        })
+        para("Adjust if the kids are always cold or always warm (shifts the suggestions by about 5°).")
+        root.addView(RadioGroup(this).apply {
+            orientation = LinearLayout.VERTICAL
+            listOf(-1 to "Kids run cold", 0 to "Normal", 1 to "Kids run warm").forEach { (v, label) ->
+                addView(RadioButton(ctx).apply {
+                    id = View.generateViewId(); text = label; textSize = 16f; tag = v
+                    isChecked = Prefs.kidsRun(ctx) == v
+                })
+            }
+            setOnCheckedChangeListener { group, checkedId ->
+                val v = group.findViewById<RadioButton>(checkedId)?.tag as? Int ?: return@setOnCheckedChangeListener
+                Prefs.setKidsRun(ctx, v); Scheduler.refreshAll(ctx)
+            }
+        })
+
+        heading("Home Assistant (backup)")
+        para("Used for current conditions if the station isn't set up or can't be reached. Use a long-lived access token (your HA profile → Security). Leave blank to skip.")
         val url = field("http://homeassistant.local:8123", Prefs.haUrl(ctx))
         val token = field("Long-lived access token", Prefs.haToken(ctx), secret = true)
         val entity = field("weather.forecast_home", Prefs.haEntity(ctx))
@@ -199,7 +237,7 @@ class SettingsActivity : Activity() {
             }
         })
 
-        para("Backup source (Open-Meteo, no account needed) uses this location if Home Assistant can't be reached.")
+        para("Forecast location (Open-Meteo, no account needed). Used for forecasts when no station is set up, and for current conditions if nothing else answers.")
         val placeNow = TextView(this).apply { text = "Current: ${Prefs.weatherPlace(ctx)}"; textSize = 14f }
         root.addView(placeNow)
         val place = field("City, state (e.g. Greenwich, CT)", "")

@@ -50,12 +50,18 @@ object WidgetUpdater {
     }
 
     private fun update(context: Context, kind: WidgetKind, ids: IntArray) {
-        if (kind == WidgetKind.DAY) Scheduler.scheduleTick(context, ids.isNotEmpty() || WidgetKind.DAY.ids(context).isNotEmpty())
+        if (kind == WidgetKind.DAY || kind == WidgetKind.WEATHER) {
+            Scheduler.scheduleTick(context, WidgetKind.DAY.ids(context).isNotEmpty() || WidgetKind.WEATHER.ids(context).isNotEmpty())
+        }
         if (ids.isEmpty()) return
         // Re-arm tomorrow's redraw. (The calendar-change job re-arms itself; scheduling it
         // from here could cancel it mid-run.)
         Scheduler.scheduleMidnight(context)
         val mgr = AppWidgetManager.getInstance(context)
+        if (kind == WidgetKind.WEATHER) {
+            updateWeather(context, mgr, ids)   // no calendar access needed
+            return
+        }
         if (!CalendarRepository.hasPermission(context)) {
             ids.forEach { mgr.updateAppWidget(it, messageViews(context, context.getString(R.string.widget_needs_permission))) }
             return
@@ -64,6 +70,7 @@ object WidgetUpdater {
             WidgetKind.MONTH -> updateMonth(context, mgr, ids)
             WidgetKind.WEEK -> updateWeek(context, mgr, ids)
             WidgetKind.DAY -> updateDay(context, mgr, ids)
+            WidgetKind.WEATHER -> updateWeather(context, mgr, ids)
         }
     }
 
@@ -159,6 +166,7 @@ object WidgetUpdater {
             isToday = true,
             events = CalendarRepository.eventsByDay(events, today, today, zone)[today].orEmpty(),
             weather = WeatherRepository.get(context),
+            wear = if (Prefs.wearOnToday(context)) wearAdvice(context, zone, today) else null,
             use24h = DateFormat.is24HourFormat(context),
             zone = zone,
             textScale = Prefs.textScale(context),
@@ -169,6 +177,47 @@ object WidgetUpdater {
                 RemoteViews(context.packageName, R.layout.widget_day).apply {
                     setImageViewUri(R.id.calendar_image, uri)
                     setOnClickPendingIntent(R.id.widget_root, openCalendarIntent(context, id, -1, today, zone))
+                }
+            }
+        }
+    }
+
+    /** Force-refresh weather data, then redraw the weather and Today widgets. */
+    fun refreshWeatherNow(context: Context, onDone: (() -> Unit)? = null) {
+        val app = context.applicationContext
+        executor.execute {
+            try { WeatherRepository.bundle(app, forceRefresh = true) } catch (t: Throwable) { Log.e(TAG, "Weather refresh failed", t) }
+        }
+        request(app, WidgetKind.WEATHER)
+        request(app, WidgetKind.DAY, onDone = onDone)
+    }
+
+    private fun wearAdvice(context: Context, zone: ZoneId, today: LocalDate): WearAdvice? =
+        WeatherRepository.bundle(context)?.let { WhatToWear.advise(it, Prefs.kidsRun(context), zone, today) }
+
+    private fun updateWeather(context: Context, mgr: AppWidgetManager, ids: IntArray) {
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now(zone)
+        val bundle = WeatherRepository.bundle(context)
+        val spec = WeatherSpec(
+            bundle = bundle,
+            wear = bundle?.let { WhatToWear.advise(it, Prefs.kidsRun(context), zone, today) },
+            use24h = DateFormat.is24HourFormat(context),
+            zone = zone,
+            textScale = Prefs.textScale(context),
+            placeName = Prefs.weatherPlace(context),
+        )
+        val refresh = PendingIntent.getBroadcast(
+            context, 7,
+            Intent(context, MonthWidgetProvider::class.java).setAction(MonthWidgetProvider.ACTION_REFRESH_WEATHER),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        for (id in ids) {
+            pushSizes(context, mgr, id) { wPx, hPx, _, _, save ->
+                val uri = save(WeatherRenderer.render(wPx, hPx, spec))
+                RemoteViews(context.packageName, R.layout.widget_day).apply {
+                    setImageViewUri(R.id.calendar_image, uri)
+                    setOnClickPendingIntent(R.id.widget_root, refresh)   // tap to refresh
                 }
             }
         }

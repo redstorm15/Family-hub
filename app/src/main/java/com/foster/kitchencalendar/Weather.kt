@@ -11,6 +11,8 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.time.LocalDate
+import java.time.ZoneId
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.roundToInt
@@ -18,6 +20,7 @@ import kotlin.math.sin
 
 enum class Sky { CLEAR, PARTLY, CLOUDY, FOG, RAIN, SNOW, STORM, WIND, UNKNOWN }
 
+/** Current conditions as shown on cards: merged from station, Home Assistant and forecast. */
 data class WeatherNow(
     val temp: Int?,
     val sky: Sky,
@@ -26,42 +29,172 @@ data class WeatherNow(
     val low: Int?,
     val precipPct: Int?,
     val unit: String,          // "°F" or "°C"
-    val source: String,        // "Home Assistant" or "Open-Meteo"
+    val source: String,        // e.g. "your station + Open-Meteo"
+    val fetchedAt: Long,
+    val feelsLike: Int? = null,
+    val isDay: Boolean = true,
+)
+
+/** Live readings from an Ambient Weather station (Ambient reports °F, mph, inches). */
+data class StationNow(
+    val name: String,
+    val tempF: Double?,
+    val feelsLikeF: Double?,
+    val humidity: Int?,
+    val dewPointF: Double?,
+    val windMph: Double?,
+    val gustMph: Double?,
+    val windDir: Int?,
+    val rainTodayIn: Double?,
+    val rainRateIn: Double?,
+    val uv: Int?,
+    val lat: Double?,
+    val lon: Double?,
+    val observedAt: Long,
+)
+
+data class HourForecast(val time: Long, val temp: Int, val apparent: Int, val sky: Sky, val precipPct: Int, val isDay: Boolean, val uv: Double?)
+data class DayForecast(val date: LocalDate, val sky: Sky, val high: Int, val low: Int, val precipPct: Int, val uvMax: Double?, val snow: Boolean)
+
+data class Forecast(
+    val currentTemp: Int?, val currentApparent: Int?, val currentSky: Sky, val currentLabel: String, val isDay: Boolean,
+    val hourly: List<HourForecast>, val daily: List<DayForecast>, val zone: ZoneId, val fetchedAt: Long,
+)
+
+/** Everything the weather widget and the Today card need, fetched together. */
+data class WeatherBundle(
+    val now: WeatherNow,
+    val station: StationNow?,
+    val hourly: List<HourForecast>,
+    val daily: List<DayForecast>,
+    val fahrenheit: Boolean,
     val fetchedAt: Long,
 )
 
 /**
- * Weather for the day widget. Tries Home Assistant first (your own weather entity);
- * if that isn't set up or fails, falls back to Open-Meteo (free, no key) for the saved
- * location. Results are cached so a brief outage doesn't blank the widget.
+ * Weather sources, best first:
+ *  - Right now: your Ambient Weather station → Home Assistant → Open-Meteo.
+ *  - Forecasts (high/low, hourly, 7-day): Open-Meteo, at the station's location when known.
+ * Results are cached so brief outages don't blank the widgets.
  */
 object WeatherRepository {
     private const val TAG = "KitchenCalendar"
-    private const val FRESH_MS = 30 * 60_000L
+    private const val BUNDLE_FRESH_MS = 4 * 60_000L
+    private const val FORECAST_FRESH_MS = 30 * 60_000L
     private const val STALE_OK_MS = 6 * 60 * 60_000L
 
-    @Volatile private var cached: WeatherNow? = null
+    @Volatile private var bundleCache: WeatherBundle? = null
+    @Volatile private var forecastCache: Forecast? = null
 
-    /** Called from the background updater thread. */
-    fun get(context: Context, forceRefresh: Boolean = false): WeatherNow? {
+    /** Called from background threads only (does network I/O). */
+    fun bundle(context: Context, forceRefresh: Boolean = false): WeatherBundle? {
         if (!Prefs.weatherEnabled(context)) return null
         val now = System.currentTimeMillis()
-        val c = cached ?: Prefs.loadWeatherCache(context)?.also { cached = it }
-        if (!forceRefresh && c != null && now - c.fetchedAt < FRESH_MS) return c
+        bundleCache?.let { if (!forceRefresh && now - it.fetchedAt < BUNDLE_FRESH_MS) return it }
 
-        val fresh = fetchHomeAssistant(context) ?: fetchOpenMeteo(context)
-        if (fresh != null) {
-            cached = fresh
-            Prefs.saveWeatherCache(context, fresh)
-            return fresh
+        val fahrenheit = Prefs.weatherFahrenheit(context)
+        val station = fetchAmbient(context)
+        val (savedLat, savedLon) = Prefs.weatherLatLon(context)
+        val lat = station?.lat ?: savedLat
+        val lon = station?.lon ?: savedLon
+
+        val cachedFc = forecastCache?.takeIf { now - it.fetchedAt < FORECAST_FRESH_MS && !forceRefresh }
+        val forecast = cachedFc ?: fetchForecast(lat, lon, fahrenheit)?.also { forecastCache = it }
+            ?: forecastCache?.takeIf { now - it.fetchedAt < STALE_OK_MS }
+        val ha = if (station == null) fetchHomeAssistant(context) else null
+
+        if (station == null && ha == null && forecast == null) {
+            return bundleCache?.takeIf { now - it.fetchedAt < STALE_OK_MS }
         }
-        return c?.takeIf { now - it.fetchedAt < STALE_OK_MS }
+
+        fun conv(f: Double?): Int? = f?.let { if (fahrenheit) it.roundToInt() else ((it - 32) * 5 / 9).roundToInt() }
+        val today = forecast?.daily?.firstOrNull()
+        val raining = (station?.rainRateIn ?: 0.0) > 0.0
+        val (sky, label) = when {
+            raining -> Sky.RAIN to "Raining"
+            ha != null -> ha.sky to ha.label
+            forecast != null -> forecast.currentSky to forecast.currentLabel
+            else -> Sky.UNKNOWN to "—"
+        }
+        val sources = listOfNotNull(
+            if (station != null) "your station" else null,
+            if (ha != null) "Home Assistant" else null,
+            if (forecast != null) "Open-Meteo" else null,
+        ).joinToString(" + ")
+        val nowW = WeatherNow(
+            temp = conv(station?.tempF) ?: ha?.temp ?: forecast?.currentTemp,
+            sky = sky, label = label,
+            high = today?.high ?: ha?.high,
+            low = today?.low ?: ha?.low,
+            precipPct = today?.precipPct ?: ha?.precipPct,
+            unit = if (station != null || forecast != null) (if (fahrenheit) "°F" else "°C") else (ha?.unit ?: "°F"),
+            source = sources,
+            fetchedAt = now,
+            feelsLike = conv(station?.feelsLikeF) ?: forecast?.currentApparent,
+            isDay = forecast?.isDay ?: true,
+        )
+        val b = WeatherBundle(nowW, station, forecast?.hourly.orEmpty(), forecast?.daily.orEmpty(), fahrenheit, now)
+        bundleCache = b
+        Prefs.saveWeatherCache(context, nowW)
+        return b
+    }
+
+    /** Current conditions only (Today widget). */
+    fun get(context: Context, forceRefresh: Boolean = false): WeatherNow? {
+        if (!Prefs.weatherEnabled(context)) return null
+        return bundle(context, forceRefresh)?.now
+            ?: Prefs.loadWeatherCache(context)?.takeIf { System.currentTimeMillis() - it.fetchedAt < STALE_OK_MS }
     }
 
     /** Drop cached results (after weather settings change). */
     fun invalidate(context: Context) {
-        cached = null
+        bundleCache = null
+        forecastCache = null
         Prefs.clearWeatherCache(context)
+    }
+
+    // ---------- Ambient Weather station ----------
+
+    private fun fetchAmbient(context: Context): StationNow? {
+        val apiKey = Prefs.ambientApiKey(context)
+        val appKey = Prefs.ambientAppKey(context)
+        if (apiKey.isEmpty() || appKey.isEmpty()) return null
+        return try {
+            val url = "https://rt.ambientweather.net/v1/devices?apiKey=" + URLEncoder.encode(apiKey, "UTF-8") +
+                "&applicationKey=" + URLEncoder.encode(appKey, "UTF-8")
+            val devices = JSONArray(http(url))
+            if (devices.length() == 0) return null
+            val wantMac = Prefs.ambientMac(context).trim()
+            var dev = devices.getJSONObject(0)
+            if (wantMac.isNotEmpty()) {
+                for (i in 0 until devices.length()) {
+                    val d = devices.getJSONObject(i)
+                    if (d.optString("macAddress").equals(wantMac, ignoreCase = true)) { dev = d; break }
+                }
+            }
+            val data = dev.getJSONObject("lastData")
+            val info = dev.optJSONObject("info")
+            val coords = info?.optJSONObject("coords")?.optJSONObject("coords")
+            StationNow(
+                name = info?.optString("name").orEmpty().ifBlank { "Your station" },
+                tempF = data.optDoubleOrNull("tempf"),
+                feelsLikeF = data.optDoubleOrNull("feelsLike"),
+                humidity = data.optDoubleOrNull("humidity")?.roundToInt(),
+                dewPointF = data.optDoubleOrNull("dewPoint"),
+                windMph = data.optDoubleOrNull("windspeedmph"),
+                gustMph = data.optDoubleOrNull("windgustmph"),
+                windDir = data.optDoubleOrNull("winddir")?.roundToInt(),
+                rainTodayIn = data.optDoubleOrNull("dailyrainin"),
+                rainRateIn = data.optDoubleOrNull("hourlyrainin"),
+                uv = data.optDoubleOrNull("uv")?.roundToInt(),
+                lat = coords?.optDoubleOrNull("lat"),
+                lon = coords?.optDoubleOrNull("lon"),
+                observedAt = data.optLong("dateutc", System.currentTimeMillis()),
+            )
+        } catch (t: Throwable) {
+            Log.w(TAG, "Ambient Weather fetch failed", t)
+            null
+        }
     }
 
     // ---------- Home Assistant ----------
@@ -120,33 +253,57 @@ object WeatherRepository {
         else -> Sky.UNKNOWN to state.replaceFirstChar { it.uppercase() }
     }
 
-    // ---------- Open-Meteo fallback ----------
+    // ---------- Open-Meteo forecast ----------
 
-    private fun fetchOpenMeteo(context: Context): WeatherNow? {
-        val (lat, lon) = Prefs.weatherLatLon(context)
-        val fahrenheit = Prefs.weatherFahrenheit(context)
-        return try {
-            val url = "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
-                "&current=temperature_2m,weather_code" +
-                "&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max" +
-                "&temperature_unit=${if (fahrenheit) "fahrenheit" else "celsius"}" +
-                "&timezone=auto&forecast_days=1"
-            val json = JSONObject(http(url))
-            val current = json.getJSONObject("current")
-            val daily = json.getJSONObject("daily")
-            val (sky, label) = wmoSky(current.optInt("weather_code", -1))
-            WeatherNow(
-                temp = current.optDoubleOrNull("temperature_2m")?.roundToInt(),
-                sky = sky, label = label,
-                high = daily.optJSONArray("temperature_2m_max")?.optDoubleOrNullAt(0)?.roundToInt(),
-                low = daily.optJSONArray("temperature_2m_min")?.optDoubleOrNullAt(0)?.roundToInt(),
-                precipPct = daily.optJSONArray("precipitation_probability_max")?.optDoubleOrNullAt(0)?.roundToInt(),
-                unit = if (fahrenheit) "°F" else "°C", source = "Open-Meteo", fetchedAt = System.currentTimeMillis(),
+    private fun fetchForecast(lat: Double, lon: Double, fahrenheit: Boolean): Forecast? = try {
+        val url = "https://api.open-meteo.com/v1/forecast?latitude=$lat&longitude=$lon" +
+            "&current=temperature_2m,apparent_temperature,weather_code,is_day" +
+            "&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code,is_day,uv_index" +
+            "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max,snowfall_sum" +
+            "&temperature_unit=${if (fahrenheit) "fahrenheit" else "celsius"}" +
+            "&wind_speed_unit=mph&precipitation_unit=inch&timezone=auto&forecast_days=8&timeformat=unixtime"
+        val json = JSONObject(http(url))
+        val zone = try { ZoneId.of(json.optString("timezone")) } catch (t: Throwable) { ZoneId.systemDefault() }
+        val cur = json.getJSONObject("current")
+        val (cSky, cLabel) = wmoSky(cur.optInt("weather_code", -1))
+
+        val h = json.getJSONObject("hourly")
+        val ht = h.getJSONArray("time")
+        val hourly = (0 until ht.length()).map { i ->
+            HourForecast(
+                time = ht.getLong(i) * 1000,
+                temp = h.getJSONArray("temperature_2m").optDoubleOrNullAt(i)?.roundToInt() ?: 0,
+                apparent = h.getJSONArray("apparent_temperature").optDoubleOrNullAt(i)?.roundToInt() ?: 0,
+                sky = wmoSky(h.getJSONArray("weather_code").optInt(i, -1)).first,
+                precipPct = h.getJSONArray("precipitation_probability").optDoubleOrNullAt(i)?.roundToInt() ?: 0,
+                isDay = h.getJSONArray("is_day").optInt(i, 1) == 1,
+                uv = h.getJSONArray("uv_index").optDoubleOrNullAt(i),
             )
-        } catch (t: Throwable) {
-            Log.w(TAG, "Open-Meteo weather failed", t)
-            null
         }
+
+        val d = json.getJSONObject("daily")
+        val dt = d.getJSONArray("time")
+        val daily = (0 until dt.length()).map { i ->
+            val code = d.getJSONArray("weather_code").optInt(i, -1)
+            DayForecast(
+                date = java.time.Instant.ofEpochSecond(dt.getLong(i)).atZone(zone).toLocalDate(),
+                sky = wmoSky(code).first,
+                high = d.getJSONArray("temperature_2m_max").optDoubleOrNullAt(i)?.roundToInt() ?: 0,
+                low = d.getJSONArray("temperature_2m_min").optDoubleOrNullAt(i)?.roundToInt() ?: 0,
+                precipPct = d.getJSONArray("precipitation_probability_max").optDoubleOrNullAt(i)?.roundToInt() ?: 0,
+                uvMax = d.getJSONArray("uv_index_max").optDoubleOrNullAt(i),
+                snow = (d.getJSONArray("snowfall_sum").optDoubleOrNullAt(i) ?: 0.0) > 0.0 || wmoSky(code).first == Sky.SNOW,
+            )
+        }
+        Forecast(
+            currentTemp = cur.optDoubleOrNull("temperature_2m")?.roundToInt(),
+            currentApparent = cur.optDoubleOrNull("apparent_temperature")?.roundToInt(),
+            currentSky = cSky, currentLabel = cLabel, isDay = cur.optInt("is_day", 1) == 1,
+            hourly = hourly, daily = daily, zone = zone, fetchedAt = System.currentTimeMillis(),
+        )
+    } catch (t: Throwable) {
+        Log.w(TAG, "Open-Meteo forecast failed", t)
+        null
     }
 
     /** WMO weather interpretation codes used by Open-Meteo. */
@@ -235,7 +392,7 @@ object WeatherRepository {
 
 /** Simple weather glyphs drawn to match the motif style. */
 object WeatherIcon {
-    fun draw(canvas: Canvas, sky: Sky, cx: Float, cy: Float, s: Float, color: Int, accent: Int) {
+    fun draw(canvas: Canvas, sky: Sky, cx: Float, cy: Float, s: Float, color: Int, accent: Int, night: Boolean = false) {
         val f = Paint(Paint.ANTI_ALIAS_FLAG).apply { this.color = color }
         val st = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             style = Paint.Style.STROKE; this.color = color; strokeWidth = s * 0.1f; strokeCap = Paint.Cap.ROUND
@@ -258,9 +415,18 @@ object WeatherIcon {
         }
         val sunPaint = Paint(f).apply { this.color = accent }
         val sunStroke = Paint(st).apply { this.color = accent }
+        fun moon(x: Float, y: Float, r: Float) {
+            val disc = Path().apply { addCircle(x, y, r * 0.55f, Path.Direction.CW) }
+            val bite = Path().apply { addCircle(x + r * 0.3f, y - r * 0.2f, r * 0.45f, Path.Direction.CW) }
+            disc.op(bite, Path.Op.DIFFERENCE)
+            canvas.drawPath(disc, sunPaint)
+        }
         when (sky) {
-            Sky.CLEAR -> sun(cx, cy, s, sunPaint, sunStroke)
-            Sky.PARTLY -> { sun(cx - s * 0.3f, cy - s * 0.3f, s * 0.75f, sunPaint, sunStroke); cloud(cx + s * 0.1f, cy + s * 0.1f, s * 0.8f, f) }
+            Sky.CLEAR -> if (night) moon(cx, cy, s) else sun(cx, cy, s, sunPaint, sunStroke)
+            Sky.PARTLY -> {
+                if (night) moon(cx - s * 0.3f, cy - s * 0.3f, s * 0.8f) else sun(cx - s * 0.3f, cy - s * 0.3f, s * 0.75f, sunPaint, sunStroke)
+                cloud(cx + s * 0.1f, cy + s * 0.1f, s * 0.8f, f)
+            }
             Sky.CLOUDY, Sky.UNKNOWN -> cloud(cx, cy, s, f)
             Sky.FOG -> {
                 cloud(cx, cy - s * 0.2f, s * 0.85f, f)

@@ -6,6 +6,8 @@
     <string name="widget_week_description">Rolling 7-day schedule: a list in portrait, seven columns in landscape</string>
     <string name="widget_day_label">Today</string>
     <string name="widget_day_description">Today at a glance: weather, what\'s next, and a timeline of the day</string>
+    <string name="widget_weather_label">Weather</string>
+    <string name="widget_weather_description">Your weather station, what to wear, hourly and 7-day forecast</string>
     <string name="widget_loading">Loading calendar…</string>
     <string name="widget_needs_permission">Tap to allow calendar access</string>
 </resources>

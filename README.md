@@ -70,9 +70,22 @@ happening now or up next (with a countdown), and a timeline that fits itself to 
 In landscape, the timeline sits on the left with a list on the right. It refreshes every
 ~15 minutes and switches to the new day at midnight.
 
+**Weather** (Kitchen Calendar → "Weather"): your Ambient Weather station's live readings
+(temperature, feels like, wind and gusts, humidity and dew point, rain today, UV), a
+"What to wear" card for the kids, the hourly forecast, and a 7-day forecast with range bars.
+The background follows the sky: blue when clear, gray when overcast, dark at night. Tap it to refresh.
+
+**What to wear** uses the coldest and warmest "feels like" between 7am and 6pm, plus rain,
+snow and UV, to suggest a winter coat, jacket, sweater, long sleeves, t-shirt or shorts, along
+with a raincoat, umbrella, boots or sunscreen. "Kids run cold / warm" shifts it by about 5°.
+It also appears on the Today widget (this can be turned off).
+
 ### Weather
 
-1. **Home Assistant first:** Settings → Weather → enter your HA URL (for example
+0. **Ambient Weather station (current conditions):** Settings → Ambient Weather station →
+   paste the API key and Application key from ambientweather.net → Account → API Keys.
+   Forecasts come from Open-Meteo at your station's location.
+1. **Home Assistant (backup for current conditions):** Settings → Weather → enter your HA URL (for example
    `http://homeassistant.local:8123` or `http://192.168.x.x:8123`), a long-lived access token
    (HA profile → Security), and your weather entity (default `weather.forecast_home`).
 2. **Backup:** if HA isn't set up or can't be reached, it uses Open-Meteo (free, no key) for
