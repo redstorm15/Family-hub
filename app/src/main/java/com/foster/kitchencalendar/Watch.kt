@@ -31,6 +31,7 @@ object WatchServices {
         Service("Hulu", listOf("com.hulu.plus", "com.hulu.livingroomplus"), listOf("hulu")),
         Service("HBO Max", listOf("com.wbd.stream", "com.hbo.hbonow"), listOf("hbo max", "max")),
         Service("Prime Video", listOf("com.amazon.avod.thirdpartyclient"), listOf("prime video")),
+        Service("Apple TV", listOf("com.apple.atve.androidtv.appletv", "com.apple.atve.sony.appletv"), listOf("apple tv", "apple tv+")),
         Service("Paramount+", listOf("com.cbs.app"), listOf("paramount+", "paramount plus")),
         Service("Peacock", listOf("com.peacocktv.peacockandroid"), listOf("peacock")),
     )
