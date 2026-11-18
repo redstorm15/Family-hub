@@ -110,3 +110,6 @@ class IndoorWidgetProvider : BaseWidgetProvider(WidgetKind.INDOOR)
 
 /** Big tiles that open the streaming apps. */
 class WatchWidgetProvider : BaseWidgetProvider(WidgetKind.WATCH)
+
+/** Dinner plan for the week, with try nights. */
+class MealsWidgetProvider : BaseWidgetProvider(WidgetKind.MEALS)

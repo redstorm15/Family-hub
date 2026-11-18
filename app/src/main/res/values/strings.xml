@@ -13,6 +13,8 @@
     <string name="widget_mini_weather_label">Weather (small)</string>
     <string name="widget_mini_weather_description">Current weather at a glance. Resize from 1×1 up</string>
     <string name="widget_sticky_label">Sticky notes</string>
+    <string name="widget_meals_label">Dinner plan</string>
+    <string name="widget_meals_description">This week\'s dinners, with a try-something-new night</string>
     <string name="widget_watch_label">Watch</string>
     <string name="widget_watch_description">Big buttons for your streaming apps</string>
     <string name="widget_indoor_label">Indoor air</string>

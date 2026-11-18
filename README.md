@@ -133,3 +133,12 @@ Each widget now shows its own preview picture in the widget picker.
 ### Watch
 
 Add the **Watch** widget for big tiles that open YouTube TV, Netflix, Disney+, Hulu, HBO Max, Prime Video, Apple TV, Paramount+ and Peacock. Only installed apps show up, using their real icons; new installs appear within 15 minutes. Widgets can't play video, so for "TV beside the calendar" open a show and swipe it into a Samsung pop-up window.
+
+### Dinner plan
+
+Add the **Dinner plan** widget: tonight's dinner big, the rest of the week beside or below it. Tap to open the planner.
+
+- **Meal bank** starts with the family staples (nuggets/peas/rice, pasta & meatballs, tacos, pizza, takeout, mac & cheese, hot dogs & beans). Add a dinner once (name + emoji) and it's a tap from then on.
+- **✨ Fill the week** fills empty nights (no repeats, avoids last week's same night) and makes one midweek dinner a try night. **🔁 Repeat last week** copies last week.
+- **✨ Try night:** the dinner stays exactly as usual, plus one small new thing on the side, picked from gentle ideas for that meal (honey mustard to dip, corn, mango cubes, garlic bread...). "🔀 Other ideas" or "✏️ My own" if none fit. The widget shows the backup plate (default "plain chicken & rice", editable).
+- **After a try night** the planner (and the widget) asks: 👎 Nope / 🙂 Tried it / ⭐ Loved it. Nopes aren't suggested for 60 days, loved foods stop counting as "new", and everything they've tried shows under 🏆 New foods tried.

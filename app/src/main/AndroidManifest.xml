@@ -125,6 +125,27 @@
         </receiver>
 
         <receiver
+            android:name=".MealsWidgetProvider"
+            android:exported="true"
+            android:label="@string/widget_meals_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/meals_widget_info" />
+        </receiver>
+
+        <activity
+            android:name=".MealPlanActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:label="@string/widget_meals_label"
+            android:theme="@android:style/Theme.Material.Light.NoActionBar"
+            android:windowSoftInputMode="adjustResize" />
+
+        <receiver
             android:name=".WatchWidgetProvider"
             android:exported="true"
             android:label="@string/widget_watch_label">

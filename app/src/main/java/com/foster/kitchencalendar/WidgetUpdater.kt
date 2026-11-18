@@ -58,8 +58,12 @@ object WidgetUpdater {
         // from here could cancel it mid-run.)
         Scheduler.scheduleMidnight(context)
         val mgr = AppWidgetManager.getInstance(context)
-        if (kind == WidgetKind.INDOOR || kind == WidgetKind.WATCH) {
-            if (kind == WidgetKind.INDOOR) updateIndoor(context, mgr, ids) else updateWatch(context, mgr, ids)
+        if (kind == WidgetKind.INDOOR || kind == WidgetKind.WATCH || kind == WidgetKind.MEALS) {
+            when (kind) {
+                WidgetKind.INDOOR -> updateIndoor(context, mgr, ids)
+                WidgetKind.WATCH -> updateWatch(context, mgr, ids)
+                else -> updateMeals(context, mgr, ids)
+            }
             return   // no calendar access needed
         }
         if (kind == WidgetKind.STICKY || kind == WidgetKind.EASEL) {
@@ -85,6 +89,7 @@ object WidgetUpdater {
             WidgetKind.EASEL -> updateEasel(context, mgr, ids)
             WidgetKind.INDOOR -> updateIndoor(context, mgr, ids)
             WidgetKind.WATCH -> updateWatch(context, mgr, ids)
+            WidgetKind.MEALS -> updateMeals(context, mgr, ids)
         }
     }
 
@@ -383,6 +388,26 @@ object WidgetUpdater {
                         }
                         addView(R.id.grid, row)
                     }
+                }
+            }
+        }
+    }
+
+    private fun updateMeals(context: Context, mgr: AppWidgetManager, ids: IntArray) {
+        val today = LocalDate.now()
+        val spec = MealSpec(today, MealStore.week(context, today), MealStore.backup(context), MealStore.pendingFeedback(context, today))
+        val density = context.resources.displayMetrics.density
+        val open = PendingIntent.getActivity(
+            context, 700_000,
+            Intent(context, MealPlanActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+        for (id in ids) {
+            pushSizes(context, mgr, id) { wPx, hPx, viewW, viewH, save ->
+                val uri = save(MealRenderer.render(wPx, hPx, viewW / density, viewH / density, spec))
+                RemoteViews(context.packageName, R.layout.widget_day).apply {
+                    setImageViewUri(R.id.calendar_image, uri)
+                    setOnClickPendingIntent(R.id.widget_root, open)
                 }
             }
         }
