@@ -57,6 +57,10 @@ object WidgetUpdater {
         // from here could cancel it mid-run.)
         Scheduler.scheduleMidnight(context)
         val mgr = AppWidgetManager.getInstance(context)
+        if (kind == WidgetKind.STICKY) {
+            updateSticky(context, mgr, ids)
+            return   // no calendar access needed
+        }
         if (kind == WidgetKind.WEATHER || kind == WidgetKind.MINI_WEATHER) {
             if (kind == WidgetKind.WEATHER) updateWeather(context, mgr, ids) else updateMiniWeather(context, mgr, ids)
             return   // no calendar access needed
@@ -72,6 +76,7 @@ object WidgetUpdater {
             WidgetKind.WEATHER -> updateWeather(context, mgr, ids)
             WidgetKind.DATE -> updateDate(context, mgr, ids)
             WidgetKind.MINI_WEATHER -> updateMiniWeather(context, mgr, ids)
+            WidgetKind.STICKY -> updateSticky(context, mgr, ids)
         }
     }
 
@@ -280,6 +285,45 @@ object WidgetUpdater {
                 }
             }
         }
+    }
+
+    private fun updateSticky(context: Context, mgr: AppWidgetManager, ids: IntArray) {
+        val notes = StickyStore.all(context)
+        val pkg = context.packageName
+        for (id in ids) {
+            pushSizes(context, mgr, id) { wPx, hPx, _, _, save ->
+                val uri = save(StickyRenderer.render(wPx, hPx, notes))
+                val tiles = StickyBoard.tiles(notes.size)
+                val (cols, rows) = StickyBoard.grid(tiles, wPx.toFloat(), hPx.toFloat())
+                RemoteViews(pkg, R.layout.widget_sticky).apply {
+                    setImageViewUri(R.id.calendar_image, uri)
+                    removeAllViews(R.id.grid)
+                    for (r in 0 until rows) {
+                        val row = RemoteViews(pkg, R.layout.widget_row)
+                        for (c in 0 until cols) {
+                            val slot = r * cols + c
+                            val cell = RemoteViews(pkg, R.layout.widget_cell)
+                            // Empty leftover spots also start a new note: a bigger target for small hands.
+                            val noteId = if (slot < tiles) StickyBoard.noteAt(slot, notes)?.id ?: -1 else -1
+                            cell.setOnClickPendingIntent(R.id.cell, stickyIntent(context, id, slot, noteId))
+                            row.addView(R.id.row, cell)
+                        }
+                        addView(R.id.grid, row)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun stickyIntent(context: Context, widgetId: Int, slot: Int, noteId: Int): PendingIntent {
+        val intent = Intent(context, StickyEditorActivity::class.java)
+            .setData(Uri.parse("kitchencalendar://sticky/$widgetId/$slot/$noteId"))
+            .putExtra(StickyEditorActivity.EXTRA_NOTE_ID, noteId)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+        return PendingIntent.getActivity(
+            context, 500_000 + widgetId * 100 + slot, intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
     }
 
     /**

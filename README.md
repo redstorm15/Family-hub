@@ -98,3 +98,14 @@ chance when it's wider or taller. It uses sky colors.
    the saved location (Greenwich, CT by default; change it with "Look up location").
 3. **Test weather** shows which source answered. Results are cached for 30 minutes, and a
    cached reading up to 6 hours old is shown if both sources fail.
+
+### Sticky notes
+
+Add the **Sticky notes** widget once and resize it as big as you like. It's a family board:
+
+- **Tap the green +** to make a new note. A big note pops up to draw on with a finger or the S Pen.
+- **Tap a note** to add to it, change its color, or **Throw away** when it's done.
+- Buttons: paper colors, pen colors, **Undo**, **Erase**, **Aa** (type instead of drawing), **Stick it!**
+- Tap outside the note to cancel. Erasing everything and tapping Stick it also removes the note.
+- The board holds 12 notes, newest first; the + always stays in the top-left. A 13th note bumps the oldest one.
+- Notes are shared, so two boards show the same notes, and removing a board doesn't lose them.
