@@ -71,6 +71,8 @@ class MonthWidgetProvider : BaseWidgetProvider(WidgetKind.MONTH) {
                 // Moves the day view's "now" line and "Up next", and refreshes weather.
                 val pending = goAsync()
                 WidgetUpdater.request(context, WidgetKind.DAY)
+                WidgetUpdater.request(context, WidgetKind.DATE)
+                WidgetUpdater.request(context, WidgetKind.MINI_WEATHER)
                 WidgetUpdater.request(context, WidgetKind.WEATHER) { pending.finish() }
             }
             ACTION_REFRESH_WEATHER -> {
@@ -90,3 +92,7 @@ class WeekWidgetProvider : BaseWidgetProvider(WidgetKind.WEEK)
 class DayWidgetProvider : BaseWidgetProvider(WidgetKind.DAY)
 
 class WeatherWidgetProvider : BaseWidgetProvider(WidgetKind.WEATHER)
+
+class DateWidgetProvider : BaseWidgetProvider(WidgetKind.DATE)
+
+class MiniWeatherWidgetProvider : BaseWidgetProvider(WidgetKind.MINI_WEATHER)

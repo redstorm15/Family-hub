@@ -27,7 +27,7 @@ enum class Wear(val label: String) {
     SUNSCREEN("Sunscreen"),
 }
 
-data class WearAdvice(val items: List<Wear>, val headline: String, val note: String?)
+data class WearAdvice(val items: List<Wear>, val headline: String, val note: String?, val forTomorrow: Boolean = false)
 
 /**
  * Kid-friendly clothing suggestions for the school day (7am–6pm), based on the
@@ -35,10 +35,18 @@ data class WearAdvice(val items: List<Wear>, val headline: String, val note: Str
  */
 object WhatToWear {
 
+    /**
+     * Before 7am: the whole school day. During the day: only the hours left until 6pm
+     * (a cold morning that's already over shouldn't mean a winter coat at noon).
+     * After 6pm: tomorrow, so it's ready for laying out clothes the night before.
+     */
     fun advise(b: WeatherBundle, kidsRun: Int, zone: ZoneId, today: LocalDate): WearAdvice? {
-        val start = today.atTime(7, 0).atZone(zone).toInstant().toEpochMilli()
-        val end = today.atTime(18, 0).atZone(zone).toInstant().toEpochMilli()
         val now = System.currentTimeMillis()
+        fun at(d: LocalDate, h: Int) = d.atTime(h, 0).atZone(zone).toInstant().toEpochMilli()
+        val forTomorrow = now >= at(today, 18)
+        val day = if (forTomorrow) today.plusDays(1) else today
+        val start = if (forTomorrow) at(day, 7) else maxOf(at(day, 7), now - 3_600_000)
+        val end = at(day, 18)
         var window = b.hourly.filter { it.time in start..end }
         if (window.isEmpty()) window = b.hourly.filter { it.time >= now }.take(10)
         if (window.isEmpty()) return null
@@ -51,7 +59,7 @@ object WhatToWear {
         val cold = toF(rawCold) + shift
         val warm = toF(rawWarm) + shift
         val rain = window.maxOf { it.precipPct }
-        val today0 = b.daily.firstOrNull()
+        val today0 = b.daily.firstOrNull { it.date == day }
         val snow = window.any { it.sky == Sky.SNOW } || (today0?.snow == true && cold < 36)
         val uv = max(window.maxOf { it.uv ?: 0.0 }, b.station?.uv?.toDouble() ?: 0.0)
 
@@ -64,7 +72,7 @@ object WhatToWear {
             cold < 70 -> { items += Wear.LONG_SLEEVES; "Long sleeves today" }
             cold < 78 -> { items += Wear.TSHIRT; "T-shirt weather" }
             else -> { items += Wear.TSHIRT; items += Wear.SHORTS; "Shorts weather" }
-        }.let { if (snow) "Snow gear today" else it }
+        }.let { if (snow) "Snow gear" else it }
 
         if (snow) {
             items += Wear.SNOW_BOOTS
@@ -78,11 +86,12 @@ object WhatToWear {
         if (uv >= 6) items += Wear.SUNSCREEN
 
         val note = when {
-            warm - cold >= 18 -> "Layers: $rawCold° this morning, $rawWarm° this afternoon"
+            warm - cold >= 15 -> "Layers: $rawCold° to $rawWarm°"
             rain in 30..49 && !snow -> "$rain% chance of rain"
-            else -> null
+            rain >= 50 && !snow -> "$rain% chance of rain"
+            else -> "Feels like $rawCold°–$rawWarm°"
         }
-        return WearAdvice(items.take(4), headline, note)
+        return WearAdvice(items.take(4), if (forTomorrow) "Tomorrow: $headline" else headline, note, forTomorrow)
     }
 }
 
@@ -204,6 +213,7 @@ object WearIcon {
      * on the right. Draws only text and icons; the caller paints any card behind it.
      */
     fun panel(canvas: Canvas, rect: RectF, advice: WearAdvice, textColor: Int, mutedColor: Int) {
+        if (rect.height() > rect.width() * 0.42f) return tallPanel(canvas, rect, advice, textColor, mutedColor)
         val h = rect.height()
         val head = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = textColor; typeface = Draw.bold; textSize = h * 0.2f }
         val note = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = mutedColor; typeface = Draw.regular; textSize = h * 0.14f }
@@ -215,7 +225,9 @@ object WearIcon {
         val pad = h * 0.14f
         val x = rect.left + pad
         canvas.drawText("WHAT TO WEAR", x, rect.top + pad + kicker.textSize, kicker)
-        canvas.drawText(Draw.ellipsize(advice.headline, head, textW - pad), x, rect.centerY() + head.textSize * 0.35f, head)
+        val lines = Draw.wrap(advice.headline, head, textW - pad, 2)
+        val firstBase = rect.centerY() + head.textSize * 0.35f - (lines.size - 1) * head.textSize * 0.55f
+        lines.forEachIndexed { i, l -> canvas.drawText(l, x, firstBase + i * head.textSize * 1.1f, head) }
         advice.note?.let { canvas.drawText(Draw.ellipsize(it, note, textW - pad), x, rect.bottom - pad, note) }
 
         val n = advice.items.size
@@ -227,6 +239,48 @@ object WearIcon {
             val cx = areaL + slot * (i + 0.5f)
             draw(canvas, wear, cx, rect.top + h * 0.42f, iconS)
             canvas.drawText(Draw.ellipsize(wear.label, label, slot * 0.95f), cx, rect.bottom - pad * 0.9f, label)
+        }
+    }
+
+    /** Big layout: headline on top, large clothing pictures in a grid, note at the bottom. */
+    private fun tallPanel(canvas: Canvas, rect: RectF, advice: WearAdvice, textColor: Int, mutedColor: Int) {
+        val w = rect.width()
+        val pad = minOf(w, rect.height()) * 0.07f
+        val kicker = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = mutedColor; typeface = Draw.medium; textSize = w * 0.045f; letterSpacing = 0.12f
+        }
+        val head = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = textColor; typeface = Draw.bold; textSize = w * 0.085f }
+        val note = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = mutedColor; typeface = Draw.regular; textSize = w * 0.05f }
+        val label = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = textColor; typeface = Draw.medium; textSize = w * 0.055f; textAlign = Paint.Align.CENTER
+        }
+        val x = rect.left + pad
+        var y = rect.top + pad + kicker.textSize
+        canvas.drawText("WHAT TO WEAR", x, y, kicker)
+        for (line in Draw.wrap(advice.headline, head, w - 2 * pad, 2)) {
+            y += head.textSize * 1.15f
+            canvas.drawText(line, x, y, head)
+        }
+        val noteH = if (advice.note != null) note.textSize * 1.8f else 0f
+        advice.note?.let { canvas.drawText(Draw.ellipsize(it, note, w - 2 * pad), x, rect.bottom - pad, note) }
+
+        val n = advice.items.size
+        if (n == 0) return
+        val gridTop = y + pad * 0.8f
+        val gridBottom = rect.bottom - pad - noteH
+        val cols = if (n <= 2) n else 2
+        val rows = (n + cols - 1) / cols
+        val cellW = (w - 2 * pad) / cols
+        val cellH = (gridBottom - gridTop) / rows
+        if (cellH <= 0) return
+        val iconS = minOf(cellW * 0.3f, (cellH - label.textSize * 1.6f) * 0.42f)
+        advice.items.forEachIndexed { i, wear ->
+            val c = i % cols
+            val r = i / cols
+            val cx = rect.left + pad + cellW * (c + 0.5f)
+            val cy = gridTop + cellH * r + (cellH - label.textSize * 1.6f) / 2
+            draw(canvas, wear, cx, cy, iconS)
+            canvas.drawText(Draw.ellipsize(wear.label, label, cellW * 0.95f), cx, gridTop + cellH * (r + 1) - label.textSize * 0.4f, label)
         }
     }
 }

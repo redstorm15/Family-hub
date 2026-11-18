@@ -73,13 +73,14 @@ object WeatherRenderer {
         }
 
         val area = RectF(pad, pad, w - pad, h - pad)
-        if (w > h * 0.95f) {
+        if (w > h * 1.15f) {
             // Landscape: now + what to wear on the left, forecasts on the right.
             val split = area.left + area.width() * 0.4f
             val left = RectF(area.left, area.top, split - pad / 2, area.bottom)
             var y = drawNow(canvas, left, b, spec, u)
             y = drawTiles(canvas, RectF(left.left, y, left.right, left.bottom), b, u, cols = 2)
-            spec.wear?.let { drawWear(canvas, RectF(left.left, y, left.right, min(left.bottom, y + u * 5.2f)), it, u) }
+            // What to wear takes whatever is left of the column, so the pictures can be big.
+            spec.wear?.let { drawWear(canvas, RectF(left.left, y, left.right, left.bottom), it, u) }
             val right = RectF(split + pad / 2, area.top, area.right, area.bottom)
             val hourlyBottom = right.top + right.height() * 0.36f
             drawHourly(canvas, RectF(right.left, right.top, right.right, hourlyBottom), b, spec, u)
@@ -88,8 +89,9 @@ object WeatherRenderer {
             var y = drawNow(canvas, area, b, spec, u)
             y = drawTiles(canvas, RectF(area.left, y, area.right, area.bottom), b, u, cols = 4)
             spec.wear?.let {
-                drawWear(canvas, RectF(area.left, y, area.right, y + u * 5.2f), it, u)
-                y += u * 5.2f + u * 0.6f
+                val wearH = u * 7.2f
+                drawWear(canvas, RectF(area.left, y, area.right, y + wearH), it, u)
+                y += wearH + u * 0.6f
             }
             val hourlyH = u * 6.6f
             drawHourly(canvas, RectF(area.left, y, area.right, y + hourlyH), b, spec, u)
@@ -143,11 +145,11 @@ object WeatherRenderer {
         val st = b.station ?: return area.top
         fun f(x: Double?) = x?.let { if (b.fahrenheit) it.roundToInt() else ((it - 32) * 5 / 9).roundToInt() }
         val tiles = listOf(
-            Triple("WIND", st.windMph?.let { "${it.roundToInt()} mph ${compass(st.windDir)}" } ?: "—",
-                st.gustMph?.let { "gusts ${it.roundToInt()}" } ?: ""),
-            Triple("HUMIDITY", st.humidity?.let { "$it%" } ?: "—", f(st.dewPointF)?.let { "dew point $it°" } ?: ""),
-            Triple("RAIN TODAY", st.rainTodayIn?.let { "%.2f in".format(it) } ?: "—",
-                if ((st.rainRateIn ?: 0.0) > 0) "%.2f in/hr now".format(st.rainRateIn) else "dry right now"),
+            Triple("WIND", st.windMph?.let { if (it < 1) "Calm" else "${it.roundToInt()} ${compass(st.windDir)}" } ?: "—",
+                st.gustMph?.takeIf { it >= 1 }?.let { "gusts ${it.roundToInt()} mph" } ?: "mph"),
+            Triple("HUMIDITY", st.humidity?.let { "$it%" } ?: "—", f(st.dewPointF)?.let { "dew $it°" } ?: ""),
+            Triple("RAIN TODAY", st.rainTodayIn?.let { "%.2f\"".format(it) } ?: "—",
+                if ((st.rainRateIn ?: 0.0) > 0) "%.2f\"/hr now".format(st.rainRateIn) else "Dry now"),
             Triple("UV INDEX", st.uv?.toString() ?: "—", uvLabel(st.uv)),
         )
         val rows = (tiles.size + cols - 1) / cols
@@ -189,16 +191,21 @@ object WeatherRenderer {
         canvas.drawText("HOURLY", rect.left + u * 0.8f, rect.top + u * 1.2f, k)
         val now = System.currentTimeMillis()
         val startIdx = b.hourly.indexOfFirst { it.time + 3_600_000 > now }.coerceAtLeast(0)
-        val n = (floor(rect.width() / (u * 3.4f)).toInt()).coerceIn(6, 24)
-        val hours = b.hourly.drop(startIdx).take(n)
+        val perRow = (floor(rect.width() / (u * 3.4f)).toInt()).coerceIn(6, 24)
+        val rowH = u * 5.2f
+        val rows = if (rect.height() >= u * 1.6f + rowH * 2 + u * 0.4f) 2 else 1
+        val hours = b.hourly.drop(startIdx).take(min(24, perRow * rows))
         if (hours.isEmpty()) return
-        val slot = (rect.width() - u * 0.8f) / hours.size
+        val cols = (hours.size + rows - 1) / rows
+        val slot = (rect.width() - u * 0.8f) / cols
         val tP = text(u * 0.85f, Draw.medium, muted).apply { textAlign = Paint.Align.CENTER }
         val dP = text(u * 1.1f, Draw.bold, white).apply { textAlign = Paint.Align.CENTER }
         val rP = text(u * 0.75f, Draw.medium, rainBlue).apply { textAlign = Paint.Align.CENTER }
-        val top = rect.top + u * 1.6f
+        val block = rows * rowH
+        val top0 = rect.top + u * 1.6f + max(0f, (rect.height() - u * 1.6f - block) / 2 - u * 0.4f)
         hours.forEachIndexed { i, hr ->
-            val cx = rect.left + u * 0.4f + slot * (i + 0.5f)
+            val top = top0 + (i / cols) * rowH
+            val cx = rect.left + u * 0.4f + slot * (i % cols + 0.5f)
             val label = if (i == 0) "Now" else Draw.timeLabel(hr.time, spec.zone, spec.use24h)
             canvas.drawText(label, cx, top + u * 0.9f, tP)
             WeatherIcon.draw(canvas, hr.sky, cx, top + u * 2.3f, u * 0.75f, white, Color.parseColor("#FAC775"), night = !hr.isDay)

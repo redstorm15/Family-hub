@@ -80,6 +80,12 @@ snow and UV, to suggest a winter coat, jacket, sweater, long sleeves, t-shirt or
 with a raincoat, umbrella, boots or sunscreen. "Kids run cold / warm" shifts it by about 5°.
 It also appears on the Today widget (this can be turned off).
 
+**Date** and **Weather (small)**: resizable from 1×1 up. Date shows the weekday and day
+number at 1×1; at 2×2 it adds the month and what's next; wider or taller shows more events
+(with tomorrow's when today is done). It uses the monthly theme. Small weather shows the icon and
+temperature at 1×1, then the condition, high/low and feels-like, and the clothing pick and rain
+chance when it's wider or taller. It uses sky colors.
+
 ### Weather
 
 0. **Ambient Weather station (current conditions):** Settings → Ambient Weather station →

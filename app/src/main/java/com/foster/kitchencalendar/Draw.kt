@@ -30,6 +30,28 @@ object Draw {
         return if (n <= 0) "" else text.substring(0, n).trimEnd() + ell
     }
 
+    /** Greedy word wrap into at most [maxLines] lines; the last line is ellipsized. */
+    fun wrap(text: String, p: Paint, maxW: Float, maxLines: Int): List<String> {
+        val words = text.split(" ").filter { it.isNotEmpty() }
+        val lines = mutableListOf<String>()
+        var cur = ""
+        for ((i, w) in words.withIndex()) {
+            val trial = if (cur.isEmpty()) w else "$cur $w"
+            if (p.measureText(trial) <= maxW || cur.isEmpty()) {
+                cur = trial
+            } else {
+                lines += cur
+                cur = w
+                if (lines.size == maxLines - 1) {
+                    cur = words.drop(i).joinToString(" ")
+                    break
+                }
+            }
+        }
+        if (cur.isNotEmpty()) lines += cur
+        return lines.take(maxLines).mapIndexed { i, l -> if (i == maxLines - 1) ellipsize(l, p, maxW) else l }
+    }
+
     fun luminance(c: Int): Double =
         (0.299 * Color.red(c) + 0.587 * Color.green(c) + 0.114 * Color.blue(c)) / 255.0
 

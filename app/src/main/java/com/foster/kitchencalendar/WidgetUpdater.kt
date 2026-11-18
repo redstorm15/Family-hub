@@ -50,17 +50,16 @@ object WidgetUpdater {
     }
 
     private fun update(context: Context, kind: WidgetKind, ids: IntArray) {
-        if (kind == WidgetKind.DAY || kind == WidgetKind.WEATHER) {
-            Scheduler.scheduleTick(context, WidgetKind.DAY.ids(context).isNotEmpty() || WidgetKind.WEATHER.ids(context).isNotEmpty())
-        }
+        val ticking = listOf(WidgetKind.DAY, WidgetKind.WEATHER, WidgetKind.DATE, WidgetKind.MINI_WEATHER)
+        if (kind in ticking) Scheduler.scheduleTick(context, ticking.any { it.ids(context).isNotEmpty() })
         if (ids.isEmpty()) return
         // Re-arm tomorrow's redraw. (The calendar-change job re-arms itself; scheduling it
         // from here could cancel it mid-run.)
         Scheduler.scheduleMidnight(context)
         val mgr = AppWidgetManager.getInstance(context)
-        if (kind == WidgetKind.WEATHER) {
-            updateWeather(context, mgr, ids)   // no calendar access needed
-            return
+        if (kind == WidgetKind.WEATHER || kind == WidgetKind.MINI_WEATHER) {
+            if (kind == WidgetKind.WEATHER) updateWeather(context, mgr, ids) else updateMiniWeather(context, mgr, ids)
+            return   // no calendar access needed
         }
         if (!CalendarRepository.hasPermission(context)) {
             ids.forEach { mgr.updateAppWidget(it, messageViews(context, context.getString(R.string.widget_needs_permission))) }
@@ -71,6 +70,8 @@ object WidgetUpdater {
             WidgetKind.WEEK -> updateWeek(context, mgr, ids)
             WidgetKind.DAY -> updateDay(context, mgr, ids)
             WidgetKind.WEATHER -> updateWeather(context, mgr, ids)
+            WidgetKind.DATE -> updateDate(context, mgr, ids)
+            WidgetKind.MINI_WEATHER -> updateMiniWeather(context, mgr, ids)
         }
     }
 
@@ -189,11 +190,73 @@ object WidgetUpdater {
             try { WeatherRepository.bundle(app, forceRefresh = true) } catch (t: Throwable) { Log.e(TAG, "Weather refresh failed", t) }
         }
         request(app, WidgetKind.WEATHER)
+        request(app, WidgetKind.MINI_WEATHER)
         request(app, WidgetKind.DAY, onDone = onDone)
     }
 
     private fun wearAdvice(context: Context, zone: ZoneId, today: LocalDate): WearAdvice? =
         WeatherRepository.bundle(context)?.let { WhatToWear.advise(it, Prefs.kidsRun(context), zone, today) }
+
+    private fun refreshIntent(context: Context): PendingIntent = PendingIntent.getBroadcast(
+        context, 7,
+        Intent(context, MonthWidgetProvider::class.java).setAction(MonthWidgetProvider.ACTION_REFRESH_WEATHER),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+    )
+
+    private fun updateMiniWeather(context: Context, mgr: AppWidgetManager, ids: IntArray) {
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now(zone)
+        val bundle = WeatherRepository.bundle(context)
+        val spec = WeatherMiniSpec(
+            now = bundle?.now ?: WeatherRepository.get(context),
+            wear = bundle?.let { WhatToWear.advise(it, Prefs.kidsRun(context), zone, today) },
+        )
+        val density = context.resources.displayMetrics.density
+        for (id in ids) {
+            pushSizes(context, mgr, id) { wPx, hPx, viewW, viewH, save ->
+                val uri = save(WeatherMiniRenderer.render(wPx, hPx, viewW / density, viewH / density, spec))
+                RemoteViews(context.packageName, R.layout.widget_day).apply {
+                    setImageViewUri(R.id.calendar_image, uri)
+                    setOnClickPendingIntent(R.id.widget_root, refreshIntent(context))
+                }
+            }
+        }
+    }
+
+    private fun updateDate(context: Context, mgr: AppWidgetManager, ids: IntArray) {
+        val zone = ZoneId.systemDefault()
+        val today = LocalDate.now(zone)
+        val tomorrow = today.plusDays(1)
+        val startMs = today.atStartOfDay(zone).toInstant().toEpochMilli()
+        val endMs = tomorrow.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+        val events = CalendarRepository.loadEvents(context, startMs - DAY_MS, endMs + DAY_MS, Prefs.selectedCalendars(context))
+        val byDay = CalendarRepository.eventsByDay(events, today, tomorrow, zone)
+        val now = System.currentTimeMillis()
+        val use24h = DateFormat.is24HourFormat(context)
+        val upcoming = mutableListOf<Upcoming>()
+        byDay[today].orEmpty().forEach { e ->
+            if (e.allDay) upcoming += Upcoming("All day", e)
+            else if (e.endMillis > now) upcoming += Upcoming(Draw.timeLabel(e.beginMillis, zone, use24h), e)
+        }
+        byDay[tomorrow].orEmpty().forEach { e ->
+            upcoming += Upcoming(if (e.allDay) "Tmrw" else "Tmrw ${Draw.timeLabel(e.beginMillis, zone, use24h)}", e)
+        }
+        // Timed events first so "what's next" leads; all-day items after them.
+        val ordered = upcoming.filter { !it.event.allDay && it.lead != "Tmrw" && !it.lead.startsWith("Tmrw") } +
+            upcoming.filter { it.event.allDay && !it.lead.startsWith("Tmrw") } +
+            upcoming.filter { it.lead.startsWith("Tmrw") }
+        val spec = DateMiniSpec(today, ordered)
+        val density = context.resources.displayMetrics.density
+        for (id in ids) {
+            pushSizes(context, mgr, id) { wPx, hPx, viewW, viewH, save ->
+                val uri = save(DateMiniRenderer.render(wPx, hPx, viewW / density, viewH / density, spec))
+                RemoteViews(context.packageName, R.layout.widget_day).apply {
+                    setImageViewUri(R.id.calendar_image, uri)
+                    setOnClickPendingIntent(R.id.widget_root, openCalendarIntent(context, id, -1, today, zone))
+                }
+            }
+        }
+    }
 
     private fun updateWeather(context: Context, mgr: AppWidgetManager, ids: IntArray) {
         val zone = ZoneId.systemDefault()
@@ -207,11 +270,7 @@ object WidgetUpdater {
             textScale = Prefs.textScale(context),
             placeName = Prefs.weatherPlace(context),
         )
-        val refresh = PendingIntent.getBroadcast(
-            context, 7,
-            Intent(context, MonthWidgetProvider::class.java).setAction(MonthWidgetProvider.ACTION_REFRESH_WEATHER),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
+        val refresh = refreshIntent(context)
         for (id in ids) {
             pushSizes(context, mgr, id) { wPx, hPx, _, _, save ->
                 val uri = save(WeatherRenderer.render(wPx, hPx, spec))
