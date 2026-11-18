@@ -47,7 +47,7 @@ class MealPlanActivity : Activity() {
     private val pageBg get() = pick("#FFF8EE", "#1A1612")
     private val todayCard get() = pick("#FFE9D2", "#3A2C1F")
     private val tryCard get() = pick("#F6F1FD", "#2A2337")
-    private val box get() = pick("#F7F2EA", "#332C25")
+    private val boxColor get() = pick("#F7F2EA", "#332C25")
     private val chipBg get() = pick("#F4EFE7", "#332C25")
     private val mealTile get() = pick("#FFF1E2", "#3A2F24")
     private val stroke get() = pick("#E5DED3", "#463D34")
@@ -172,7 +172,7 @@ class MealPlanActivity : Activity() {
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(10), dp(8), dp(10), dp(10))
-            background = rounded(if (item?.isNew == true) tryBg else box, 14)
+            background = rounded(if (item?.isNew == true) tryBg else boxColor, 14)
             setOnClickListener { pickPart(date, part) }
         }
         box.addView(text(if (item?.isNew == true) "✨ NEW ${part.short.uppercase()}" else part.short.uppercase(), 11f,
@@ -255,7 +255,7 @@ class MealPlanActivity : Activity() {
         val grid = GridLayout(this).apply { columnCount = 3 }
         PlateFoods.usual[part].orEmpty().forEach { f ->
             grid.addView(text("${f.emoji}  ${f.name}", 15f, ink).apply {
-                setPadding(dp(10), dp(10), dp(10), dp(10)); background = rounded(box, 12); maxLines = 2
+                setPadding(dp(10), dp(10), dp(10), dp(10)); background = rounded(boxColor, 12); maxLines = 2
                 setOnClickListener { choose(f) }
             }, gridParams())
         }
