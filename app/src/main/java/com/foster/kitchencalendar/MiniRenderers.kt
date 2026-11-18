@@ -178,6 +178,20 @@ object WeatherMiniRenderer {
 
         // Wider or taller: clothing pick and rain chance.
         val wear = spec.wear ?: return bmp
+        if (size == MiniSize.MEDIUM) {
+            // 2×2: a small clothing pick along the bottom if there's room under the text.
+            val rowTop = y + sub.textSize * 0.9f
+            val rowH = h - pad - rowTop
+            val first = wear.items.firstOrNull() ?: return bmp
+            if (rowH < bs * 0.16f) return bmp
+            val iconS = min(rowH * 0.4f, bs * 0.11f)
+            val cy = rowTop + rowH / 2
+            WearIcon.draw(canvas, first, pad + iconS, cy, iconS)
+            val lp = paint(min(rowH * 0.38f, bs * 0.09f), Draw.medium)
+            val label = wear.items.take(2).joinToString(" + ") { it.label }
+            canvas.drawText(Draw.ellipsize(label, lp, w - pad * 2 - iconS * 2.6f), pad + iconS * 2.4f, Draw.centerBaseline(lp, cy), lp)
+            return bmp
+        }
         val area = when (size) {
             MiniSize.WIDE -> RectF(blockW, pad, w - pad, h - pad)
             MiniSize.TALL -> RectF(pad, blockH, w - pad, h - pad)

@@ -85,6 +85,8 @@ object WeatherRepository {
 
     @Volatile private var bundleCache: WeatherBundle? = null
     @Volatile private var forecastCache: Forecast? = null
+    @Volatile private var stationCache: Pair<StationNow, Long>? = null
+    private const val STATION_KEEP_MS = 30 * 60_000L
 
     /** Called from background threads only (does network I/O). */
     fun bundle(context: Context, forceRefresh: Boolean = false): WeatherBundle? {
@@ -93,7 +95,9 @@ object WeatherRepository {
         bundleCache?.let { if (!forceRefresh && now - it.fetchedAt < BUNDLE_FRESH_MS) return it }
 
         val fahrenheit = Prefs.weatherFahrenheit(context)
-        val station = fetchAmbient(context)
+        // One failed request shouldn't drop the station tiles: keep the last good reading a while.
+        val station = fetchAmbient(context)?.also { stationCache = it to now }
+            ?: stationCache?.takeIf { now - it.second < STATION_KEEP_MS && Prefs.ambientApiKey(context).isNotEmpty() }?.first
         val (savedLat, savedLon) = Prefs.weatherLatLon(context)
         val lat = station?.lat ?: savedLat
         val lon = station?.lon ?: savedLon
@@ -150,6 +154,7 @@ object WeatherRepository {
     fun invalidate(context: Context) {
         bundleCache = null
         forecastCache = null
+        stationCache = null
         Prefs.clearWeatherCache(context)
     }
 

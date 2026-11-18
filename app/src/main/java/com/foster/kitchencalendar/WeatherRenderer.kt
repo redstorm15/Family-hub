@@ -73,7 +73,7 @@ object WeatherRenderer {
         }
 
         val area = RectF(pad, pad, w - pad, h - pad)
-        if (w > h * 1.15f) {
+        if (w > h * 0.8f) {   // square-ish screens (like a Fold) get two columns too
             // Landscape: now + what to wear on the left, forecasts on the right.
             val split = area.left + area.width() * 0.4f
             val left = RectF(area.left, area.top, split - pad / 2, area.bottom)
@@ -222,7 +222,7 @@ object WeatherRenderer {
         val today = LocalDate.now(ZoneId.systemDefault())
         val days = b.daily.filter { !it.date.isBefore(today) }
         val listTop = rect.top + u * 1.8f
-        val rowH = max(u * 2.0f, (rect.bottom - u * 0.5f - listTop) / min(8, max(1, days.size)))
+        val rowH = max(u * 1.7f, (rect.bottom - u * 0.5f - listTop) / min(8, max(1, days.size)))
         val fit = max(1, floor((rect.bottom - u * 0.5f - listTop) / rowH).toInt())
         val shown = days.take(min(fit, 8))
         val lo = shown.minOf { it.low }
