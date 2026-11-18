@@ -17,7 +17,12 @@ import kotlin.math.min
  * A streaming service. [packages] are the known app ids (first installed wins); [labels] are
  * fallbacks matched against installed app names, in case an app id changes.
  */
-data class Service(val name: String, val packages: List<String>, val labels: List<String>)
+data class Service(
+    val name: String,
+    val packages: List<String>,
+    val labels: List<String>,
+    val packagePrefix: String? = null,     // e.g. any "com.apple.atve…" build of the app
+)
 
 /** One installed service, ready to draw and launch. */
 data class InstalledService(val name: String, val pkg: String, val icon: Drawable)
@@ -31,7 +36,7 @@ object WatchServices {
         Service("Hulu", listOf("com.hulu.plus", "com.hulu.livingroomplus"), listOf("hulu")),
         Service("HBO Max", listOf("com.wbd.stream", "com.hbo.hbonow"), listOf("hbo max", "max")),
         Service("Prime Video", listOf("com.amazon.avod.thirdpartyclient"), listOf("prime video")),
-        Service("Apple TV", listOf("com.apple.atve.androidtv.appletv", "com.apple.atve.sony.appletv"), listOf("apple tv", "apple tv+")),
+        Service("Apple TV", listOf("com.apple.atve.androidtv.appletv", "com.apple.atve.sony.appletv"), listOf("apple tv", "apple tv+"), "com.apple.atve"),
         Service("Paramount+", listOf("com.cbs.app"), listOf("paramount+", "paramount plus")),
         Service("Peacock", listOf("com.peacocktv.peacockandroid"), listOf("peacock")),
     )
@@ -41,16 +46,21 @@ object WatchServices {
         val pm = context.packageManager
         val launchable = pm.queryIntentActivities(
             Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0,
-        ).associate { it.activityInfo.packageName to it.loadLabel(pm).toString().lowercase() }
+        ).associate { it.activityInfo.packageName to normalize(it.loadLabel(pm).toString()) }
 
         return all.mapNotNull { s ->
             val pkg = s.packages.firstOrNull { it in launchable }
-                ?: launchable.entries.firstOrNull { (_, label) -> s.labels.any { label == it } }?.key
+                ?: s.packagePrefix?.let { prefix -> launchable.keys.firstOrNull { it.startsWith(prefix) } }
+                ?: launchable.entries.firstOrNull { (_, label) -> s.labels.any { label == normalize(it) } }?.key
                 ?: return@mapNotNull null
             val icon = try { pm.getApplicationIcon(pkg) } catch (_: PackageManager.NameNotFoundException) { return@mapNotNull null }
             InstalledService(s.name, pkg, icon)
         }
     }
+
+    /** "Apple\u00A0TV" and "Apple TV" should match: fold any kind of space, case and trademark marks. */
+    private fun normalize(label: String) =
+        label.replace(Regex("[\\s\u00A0\u2007\u202F]+"), " ").replace(Regex("[™®]"), "").trim().lowercase()
 
     fun launchIntent(context: Context, pkg: String): Intent? =
         context.packageManager.getLaunchIntentForPackage(pkg)?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
