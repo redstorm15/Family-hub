@@ -106,6 +106,7 @@ data class PeopleSpec(
     val nowMillis: Long,
     val columns: List<PersonColumn>,
     val banners: List<CalEvent>,          // holidays, birthdays: shown beside the date
+    val sharedAllDay: List<CalEvent>,     // all-day items on calendars nobody owns: span every lane
     val use24h: Boolean,
     val zone: ZoneId,
     val textScale: Float,
@@ -173,69 +174,41 @@ object PeopleRenderer {
         val lanesRight = area.right - u * 0.4f
         val laneW = (lanesRight - lanesLeft) / cols.size
 
-        // ----- People row -----
+        // ----- Faces: their own band, with a thick rule under it -----
         val avatarR = min(laneW * 0.3f, u * 2.4f)
         val nameP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = theme.dayText; typeface = Draw.bold; textSize = min(u * 1.0f, laneW * 0.16f); textAlign = Paint.Align.CENTER
         }
         val rowTop = area.top + u * 0.8f
         val avatarCy = rowTop + avatarR
+        val facesBottom = avatarCy + avatarR + nameP.textSize * 1.9f
+        c.save()
+        c.clipRect(area.left, area.top, area.right, facesBottom)
+        c.drawRoundRect(RectF(area.left, area.top, area.right, facesBottom + pad), pad, pad, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = theme.outCellBg })
+        c.restore()
         cols.forEachIndexed { i, col ->
             val cx = lanesLeft + laneW * (i + 0.5f)
             drawAvatar(c, cx, avatarCy, avatarR, col, theme)
             c.drawText(Draw.ellipsize(col.person.name, nameP, laneW * 0.92f), cx, avatarCy + avatarR + nameP.textSize * 1.35f, nameP)
         }
-        var y = avatarCy + avatarR + nameP.textSize * 1.9f
-        val facesBottom = y - nameP.textSize * 0.4f
+        c.drawRect(area.left, facesBottom, area.right, facesBottom + max(2f, u * 0.18f), Paint().apply { color = theme.todayFill })
+        val gridTop = facesBottom + max(2f, u * 0.18f)
 
-        // ----- All-day row: full-width chips that flow across, each tagged with whose it is -----
-        val allDay = cols.flatMap { col -> col.events.filter { it.allDay }.map { col to it } }
-        if (allDay.isNotEmpty()) {
-            val chipH = u * 2.1f
-            val chipP = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Draw.bold; textSize = chipH * 0.46f }
-            val gap = u * 0.45f
-            val left = area.left + u * 0.6f
-            val right = area.right - u * 0.6f
-            var x = left
-            var row = 0
-            val maxRows = 2
-            y += u * 0.2f
-            for ((k, pair) in allDay.withIndex()) {
-                val (col, e) = pair
-                val bg = Draw.eventColor(e, theme)
-                val dotR = chipH * 0.3f
-                val lastSlot = row == maxRows - 1
-                val remaining = allDay.size - k
-                var label = e.title
-                var w0 = chipP.measureText(label) + dotR * 2 + chipH * 0.9f
-                if (x + min(w0, right - left) > right && x > left) {
-                    row++; x = left
-                    if (row >= maxRows) break
-                }
-                if (lastSlot && remaining > 1 && x + w0 > right - chipH * 2.5f) {
-                    label = "+$remaining more"; w0 = chipP.measureText(label) + chipH * 0.9f
-                }
-                val r = RectF(x, y + row * (chipH + gap), min(right, x + w0), y + row * (chipH + gap) + chipH)
-                c.drawRoundRect(r, chipH / 2, chipH / 2, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = bg })
-                var tx = r.left + chipH * 0.35f
-                if (!label.startsWith("+")) {
-                    // whose: a small circle with their initial (or 🏠)
-                    val dc = tx + dotR
-                    c.drawCircle(dc, r.centerY(), dotR, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = col.person.color })
-                    c.drawCircle(dc, r.centerY(), dotR, Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = u * 0.1f; color = Draw.onColor(bg) })
-                    val ip = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Draw.onColor(col.person.color); typeface = Draw.bold; textSize = dotR * 1.1f; textAlign = Paint.Align.CENTER }
-                    c.drawText(if (col.family) "🏠" else col.person.name.take(1).uppercase(), dc, Draw.centerBaseline(ip, r.centerY()), ip)
-                    tx += dotR * 2 + chipH * 0.2f
-                }
-                chipP.color = Draw.onColor(bg)
-                c.drawText(Draw.ellipsize(label, chipP, r.right - tx - chipH * 0.3f), tx, Draw.centerBaseline(chipP, r.centerY()), chipP)
-                x = r.right + gap
-                if (label.startsWith("+")) break
-            }
-            y += (row.coerceAtMost(maxRows - 1) + 1) * (chipH + gap) + u * 0.2f
-        }
+        // ----- All-day row (inside the calendar, in each person's lane) -----
+        // Shared items (calendars nobody owns, like Activities) span every lane; a person's item sits in
+        // their lane and stretches right across empty neighbours so long titles fit.
+        val maxRows = 2
+        val shared = spec.sharedAllDay
+        val perLane = cols.map { col -> col.events.filter { it.allDay } }
+        val sharedRows = min(shared.size, maxRows)
+        val laneRows = min(maxRows - sharedRows, perLane.maxOfOrNull { it.size } ?: 0).coerceAtLeast(0)
+        val allDayRows = sharedRows + laneRows
+        val chipH = u * 1.9f
+        val chipGap = u * 0.3f
+        val allDayTop = gridTop + u * 0.5f
+        val allDayBottom = if (allDayRows > 0) allDayTop + allDayRows * (chipH + chipGap) + u * 0.2f else gridTop
 
-        // ----- Timeline -----
+        // ----- Timeline geometry -----
         val timed = cols.flatMap { col -> col.events.filter { !it.allDay } }
         val dayStart = spec.date.atStartOfDay(spec.zone).toInstant().toEpochMilli()
         fun hourOf(ms: Long) = ((ms - dayStart) / 3_600_000.0).toFloat().coerceIn(0f, 24f)
@@ -246,15 +219,30 @@ object PeopleRenderer {
         startH = min(startH, floor(nowH)).coerceIn(0f, 23f)
         endH = max(endH, ceil(nowH)).coerceIn(startH + 1, 24f)
 
-        val top = y + u * 0.6f
+        val top = allDayBottom + u * 0.9f
         val bottom = area.bottom - u * 0.6f
         if (bottom - top < u * 3) return bmp
         val pxPerHour = (bottom - top) / (endH - startH)
         fun yOf(hour: Float) = top + (hour - startH) * pxPerHour
 
+        // Lane tints + dividers, all the way from the rule to the bottom
         val line = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = theme.outCellBg; strokeWidth = max(1f, u * 0.05f) }
+        cols.forEachIndexed { i, col ->
+            val x1 = lanesLeft + laneW * i
+            c.drawRect(x1, gridTop, x1 + laneW, bottom, Paint().apply { color = col.person.color; alpha = 16 })
+            if (i > 0) {
+                c.drawLine(x1, rowTop, x1, facesBottom - u * 0.3f, line)
+                c.drawLine(x1, gridTop, x1, bottom, line)
+            }
+        }
         val hourP = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = theme.mutedText; typeface = Draw.regular; textSize = min(u * 0.8f, pxPerHour * 0.45f); textAlign = Paint.Align.RIGHT
+        }
+        if (allDayRows > 0) {
+            val adP = Paint(hourP).apply { textSize = u * 0.7f; typeface = Draw.medium }
+            c.drawText("all", lanesLeft - u * 0.4f, allDayTop + chipH * 0.45f, adP)
+            c.drawText("day", lanesLeft - u * 0.4f, allDayTop + chipH * 0.45f + adP.textSize * 1.1f, adP)
+            c.drawLine(lanesLeft, allDayBottom + u * 0.4f, lanesRight, allDayBottom + u * 0.4f, line)
         }
         val step = if (pxPerHour < hourP.textSize * 1.6f) 2 else 1
         val nowY = if (nowH in startH..endH) yOf(nowH) else null
@@ -264,16 +252,42 @@ object PeopleRenderer {
             val coveredByNow = nowY != null && kotlin.math.abs(ly - nowY) < u * 1.3f
             if ((hInt - startH.toInt()) % step == 0 && !coveredByNow) c.drawText(hourLabel(hInt, spec.use24h), lanesLeft - u * 0.4f, Draw.centerBaseline(hourP, ly), hourP)
         }
-        // Lane dividers, and a faint tint of each person's color down their lane
-        cols.forEachIndexed { i, col ->
-            val x1 = lanesLeft + laneW * i
-            c.drawRect(x1, top, x1 + laneW, bottom, Paint().apply { color = col.person.color; alpha = 14 })
-            if (i > 0) {
-                c.drawLine(x1, rowTop, x1, facesBottom, line)
-                c.drawLine(x1, top, x1, bottom, line)
+
+        // ----- All-day chips (drawn over the lane lines) -----
+        val chipP = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Draw.bold; textSize = min(chipH * 0.46f, laneW * 0.11f) }
+        fun chip(x1: Float, x2: Float, rowIdx: Int, bg: Int, label: String, tag: String?) {
+            val ry = allDayTop + rowIdx * (chipH + chipGap)
+            val r = RectF(x1 + u * 0.15f, ry, x2 - u * 0.15f, ry + chipH)
+            c.drawRoundRect(r, u * 0.4f, u * 0.4f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = bg })
+            chipP.color = Draw.onColor(bg)
+            var tx = r.left + u * 0.45f
+            if (tag != null) {
+                c.drawText(tag, tx, Draw.centerBaseline(chipP, r.centerY()), chipP)
+                tx += chipP.measureText(tag) + u * 0.3f
+            }
+            c.drawText(Draw.ellipsize(label, chipP, r.right - tx - u * 0.3f), tx, Draw.centerBaseline(chipP, r.centerY()), chipP)
+        }
+        shared.take(sharedRows).forEachIndexed { k, e ->
+            val label = if (k == sharedRows - 1 && shared.size > sharedRows) "${e.title}  (+${shared.size - sharedRows} more)" else e.title
+            chip(lanesLeft, lanesRight, k, Draw.eventColor(e, theme), label, "🏠")
+        }
+        if (laneRows > 0) {
+            // taken[lane][row]: whether that lane already shows something in that row
+            val taken = Array(cols.size) { li -> BooleanArray(laneRows) { r -> r < perLane[li].size } }
+            cols.forEachIndexed { li, col ->
+                val items = perLane[li]
+                for (r in 0 until min(laneRows, items.size)) {
+                    val e = items[r]
+                    var end = li
+                    while (end + 1 < cols.size && !taken[end + 1][r]) { end++; taken[end][r] = true }
+                    val more = if (r == laneRows - 1 && items.size > laneRows) "  (+${items.size - laneRows})" else ""
+                    chip(lanesLeft + laneW * li, lanesLeft + laneW * (end + 1), sharedRows + r,
+                        if (col.family) Draw.eventColor(e, theme) else col.person.color, e.title + more, null)
+                }
             }
         }
 
+        // ----- Timed events, in their person's color -----
         val title2 = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Draw.bold; textSize = min(u * 0.95f, laneW * 0.13f) }
         val sub = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Draw.regular; textSize = title2.textSize * 0.82f }
         val minH = title2.textSize * 1.5f
@@ -285,7 +299,7 @@ object PeopleRenderer {
                 val y2 = max(y1 + minH, yOf(hourOf(e.endMillis)))
                 val cw = laneInner / n
                 val r = RectF(laneLeft + sub2 * cw, y1 + 1, laneLeft + (sub2 + 1) * cw - u * 0.12f, min(y2, bottom) - 1)
-                val bg = Draw.eventColor(e, theme)
+                val bg = if (col.family) Draw.eventColor(e, theme) else col.person.color
                 val past = e.endMillis <= spec.nowMillis
                 c.drawRoundRect(r, u * 0.3f, u * 0.3f, Paint(Paint.ANTI_ALIAS_FLAG).apply { color = bg; if (past) alpha = 140 })
                 val fg = Draw.onColor(bg)

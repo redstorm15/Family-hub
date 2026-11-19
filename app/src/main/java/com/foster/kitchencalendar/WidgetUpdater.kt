@@ -461,10 +461,13 @@ object WidgetUpdater {
         // Shared calendars nobody owns (e.g. "Family") get their own column when they have something today.
         val shared = todays.filter { it.calendarId !in owned && it.calendarId !in bannerCals }
         val banners = todays.filter { it.calendarId in bannerCals }
-        if (PeopleStore.showFamily(context) && shared.isNotEmpty()) {
-            columns.add(0, PersonColumn(Person("family", "Family", Themes.forMonth(today.monthValue).todayFill, emptySet()), null, true, shared))
+        // Shared all-day items span everyone; shared timed events get a Family lane.
+        val sharedTimed = shared.filter { !it.allDay }
+        if (PeopleStore.showFamily(context) && sharedTimed.isNotEmpty()) {
+            columns.add(0, PersonColumn(Person("family", "Family", Themes.forMonth(today.monthValue).todayFill, emptySet()), null, true, sharedTimed))
         }
-        val spec = PeopleSpec(today, System.currentTimeMillis(), columns, banners, DateFormat.is24HourFormat(context), zone, Prefs.textScale(context))
+        val spec = PeopleSpec(today, System.currentTimeMillis(), columns, banners, shared.filter { it.allDay },
+            DateFormat.is24HourFormat(context), zone, Prefs.textScale(context))
         val setup = PendingIntent.getActivity(
             context, 900_000,
             Intent(context, PeopleActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK),
