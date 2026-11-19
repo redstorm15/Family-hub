@@ -331,13 +331,14 @@ class MealPlanActivity : Activity() {
     private fun mealOptions(m: Meal) {
         val hasPhoto = MealStore.photoFile(this, m.id).exists()
         val options = listOfNotNull(
-            "📷  Take a photo", "🖼️  Choose a photo", if (hasPhoto) "Remove photo" else null, "Remove from meal bank",
+            "📷  Take a photo", "🖼️  Choose a photo", if (hasPhoto) "↻  Rotate photo" else null, if (hasPhoto) "Remove photo" else null, "Remove from meal bank",
         )
         AlertDialog.Builder(this).setTitle("${m.emoji}  ${m.name}").setItems(options.toTypedArray()) { _, which ->
             when (options[which]) {
                 "📷  Take a photo" -> takePhoto(m)
                 "🖼️  Choose a photo" -> choosePhoto(m)
                 "Remove photo" -> { MealStore.removePhoto(this, m.id); editBank() }
+                "↻  Rotate photo" -> { Photos.rotate(MealStore.photoFile(this, m.id)); editBank() }
                 else -> AlertDialog.Builder(this).setMessage("Remove ${m.name} from the meal bank?")
                     .setPositiveButton("Remove") { _, _ -> MealStore.removeMeal(this, m.id); render() }
                     .setNegativeButton("Keep", null).show()

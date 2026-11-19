@@ -187,15 +187,8 @@ object MealStore {
     fun photo(c: Context, mealId: String): Bitmap? = photoFile(c, mealId).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.path) }
 
     /** Saves a picture for a meal, shrunk to at most 1600 px on the long side. */
-    fun savePhoto(c: Context, mealId: String, open: () -> java.io.InputStream?) {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        open()?.use { BitmapFactory.decodeStream(it, null, bounds) }
-        var sample = 1
-        while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 1600) sample *= 2
-        val bmp = open()?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } ?: return
-        FileOutputStream(photoFile(c, mealId)).use { bmp.compress(Bitmap.CompressFormat.JPEG, 88, it) }
-        bmp.recycle()
-    }
+    fun savePhoto(c: Context, mealId: String, open: () -> java.io.InputStream?) =
+        Photos.saveUpright(open, photoFile(c, mealId), maxSide = 1600)
 
     fun removePhoto(c: Context, mealId: String) { photoFile(c, mealId).delete() }
 

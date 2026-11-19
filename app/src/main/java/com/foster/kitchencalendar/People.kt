@@ -90,18 +90,12 @@ object PeopleStore {
 
     fun photo(c: Context, id: String): Bitmap? = photoFile(c, id).takeIf { it.exists() }?.let { BitmapFactory.decodeFile(it.path) }
     fun hasPhoto(c: Context, id: String) = photoFile(c, id).exists()
+    fun rotatePhoto(c: Context, id: String) = Photos.rotate(photoFile(c, id))
     fun removePhoto(c: Context, id: String) { photoFile(c, id).delete() }
 
     /** Saves a square-ish portrait, at most 600 px, for the round avatar. */
-    fun savePhoto(c: Context, id: String, open: () -> java.io.InputStream?) {
-        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        open()?.use { BitmapFactory.decodeStream(it, null, bounds) }
-        var sample = 1
-        while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 600) sample *= 2
-        val bmp = open()?.use { BitmapFactory.decodeStream(it, null, BitmapFactory.Options().apply { inSampleSize = sample }) } ?: return
-        FileOutputStream(photoFile(c, id)).use { bmp.compress(Bitmap.CompressFormat.JPEG, 90, it) }
-        bmp.recycle()
-    }
+    fun savePhoto(c: Context, id: String, open: () -> java.io.InputStream?) =
+        Photos.saveUpright(open, photoFile(c, id), maxSide = 600, quality = 90)
 }
 
 /** One column on the widget: a person (or the shared Family column) and their events today. */
@@ -192,6 +186,7 @@ object PeopleRenderer {
             c.drawText(Draw.ellipsize(col.person.name, nameP, laneW * 0.92f), cx, avatarCy + avatarR + nameP.textSize * 1.35f, nameP)
         }
         var y = avatarCy + avatarR + nameP.textSize * 1.9f
+        val facesBottom = y - nameP.textSize * 0.4f
 
         // ----- All-day row: full-width chips that flow across, each tagged with whose it is -----
         val allDay = cols.flatMap { col -> col.events.filter { it.allDay }.map { col to it } }
@@ -262,16 +257,21 @@ object PeopleRenderer {
             color = theme.mutedText; typeface = Draw.regular; textSize = min(u * 0.8f, pxPerHour * 0.45f); textAlign = Paint.Align.RIGHT
         }
         val step = if (pxPerHour < hourP.textSize * 1.6f) 2 else 1
+        val nowY = if (nowH in startH..endH) yOf(nowH) else null
         for (hInt in startH.toInt()..endH.toInt()) {
             val ly = yOf(hInt.toFloat())
             c.drawLine(lanesLeft, ly, lanesRight, ly, line)
-            if ((hInt - startH.toInt()) % step == 0) c.drawText(hourLabel(hInt, spec.use24h), lanesLeft - u * 0.4f, Draw.centerBaseline(hourP, ly), hourP)
+            val coveredByNow = nowY != null && kotlin.math.abs(ly - nowY) < u * 1.3f
+            if ((hInt - startH.toInt()) % step == 0 && !coveredByNow) c.drawText(hourLabel(hInt, spec.use24h), lanesLeft - u * 0.4f, Draw.centerBaseline(hourP, ly), hourP)
         }
         // Lane dividers, and a faint tint of each person's color down their lane
         cols.forEachIndexed { i, col ->
             val x1 = lanesLeft + laneW * i
             c.drawRect(x1, top, x1 + laneW, bottom, Paint().apply { color = col.person.color; alpha = 14 })
-            if (i > 0) c.drawLine(x1, rowTop, x1, bottom, line)
+            if (i > 0) {
+                c.drawLine(x1, rowTop, x1, facesBottom, line)
+                c.drawLine(x1, top, x1, bottom, line)
+            }
         }
 
         val title2 = Paint(Paint.ANTI_ALIAS_FLAG).apply { typeface = Draw.bold; textSize = min(u * 0.95f, laneW * 0.13f) }
@@ -292,13 +292,14 @@ object PeopleRenderer {
                 title2.color = fg; sub.color = fg
                 val tx = r.left + u * 0.35f
                 val maxW = r.right - tx - u * 0.2f
+                val name = stripOwner(e.title, col.person.name)
                 if (r.height() >= title2.textSize * 2.6f) {
-                    val lines = Draw.wrap(e.title, title2, maxW, if (r.height() > title2.textSize * 4.5f) 2 else 1)
+                    val lines = Draw.wrap(name, title2, maxW, if (r.height() > title2.textSize * 4.5f) 2 else 1)
                     var ty = r.top + title2.textSize * 1.15f
                     lines.forEach { c.drawText(it, tx, ty, title2); ty += title2.textSize * 1.1f }
                     if (ty + sub.textSize * 0.2f < r.bottom) c.drawText(Draw.ellipsize(Draw.timeRange(e, spec.zone, spec.use24h), sub, maxW), tx, ty + sub.textSize * 0.15f, sub)
                 } else {
-                    c.drawText(Draw.ellipsize(e.title, title2, maxW), tx, Draw.centerBaseline(title2, r.centerY()), title2)
+                    c.drawText(Draw.ellipsize(name, title2, maxW), tx, Draw.centerBaseline(title2, r.centerY()), title2)
                 }
             }
         }
@@ -352,6 +353,15 @@ object PeopleRenderer {
             val p = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Draw.onColor(col.person.color); typeface = Draw.bold; textSize = br * 1.05f; textAlign = Paint.Align.CENTER }
             c.drawText(if (n > 9) "9+" else n.toString(), bx, Draw.centerBaseline(p, by), p)
         }
+    }
+
+    /** "Nolan: GOA practice" in Nolan's lane reads as just "GOA practice". */
+    private fun stripOwner(title: String, person: String): String {
+        val first = person.substringBefore(' ')
+        for (p in listOf("$person:", "$person -", "$first:", "$first -")) {
+            if (title.startsWith(p, ignoreCase = true)) return title.substring(p.length).trim().ifBlank { title }
+        }
+        return title
     }
 
     private fun hourLabel(h: Int, use24h: Boolean): String {

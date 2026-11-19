@@ -176,6 +176,9 @@ class PeopleActivity : Activity() {
         }
         photoRow.addView(pill("📷 Take", surface, ink) { if (commit()) { dialog.dismiss(); takePhoto(id) } }, lp(end = 8))
         photoRow.addView(pill("🖼️ Choose", surface, ink) { if (commit()) { dialog.dismiss(); choosePhoto(id) } }, lp(end = 8))
+        if (PeopleStore.hasPhoto(this, id)) photoRow.addView(pill("↻ Rotate", surface, ink) {
+            PeopleStore.rotatePhoto(this, id); toast("Rotated"); render()
+        }, lp(end = 8))
         if (PeopleStore.hasPhoto(this, id)) photoRow.addView(pill("Remove", surface, muted) {
             PeopleStore.removePhoto(this, id); toast("Photo removed")
         })
